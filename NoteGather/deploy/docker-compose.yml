@@ -1,0 +1,190 @@
+version: '3.8'
+
+# 拾笺 NoteGather · 本地开发中间件环境
+# 启动命令：cd deploy && docker compose up -d
+# 停止命令：docker compose down
+# 清除数据：docker compose down -v
+
+services:
+
+  # ============ PostgreSQL 16 ============
+  postgres:
+    image: postgres:16-alpine
+    container_name: ng-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: notegather
+      POSTGRES_USER: ng
+      POSTGRES_PASSWORD: ng123456
+      TZ: Asia/Shanghai
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d   # 启动时自动执行 init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ng -d notegather"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============ Redis 7 ============
+  redis:
+    image: redis:7-alpine
+    container_name: ng-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ""
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============ MinIO（对象存储）============
+  # 注意：宿主机端口使用 9100/9101，避免与网关服务（9000）冲突
+  minio:
+    image: minio/minio:RELEASE.2024-06-13T22-53-53Z
+    container_name: ng-minio
+    restart: unless-stopped
+    ports:
+      - "9100:9000"   # API 端口（宿主机 9100 → 容器 9000）
+      - "9101:9001"   # Console 端口
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      TZ: Asia/Shanghai
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ============ Qdrant（向量数据库）============
+  qdrant:
+    image: qdrant/qdrant:v1.9.7
+    container_name: ng-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"   # REST API
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      TZ: Asia/Shanghai
+
+  # ============ Elasticsearch 8.x + IK 中文分词 ============
+  elasticsearch:
+    image: elasticsearch:8.13.4
+    container_name: ng-elasticsearch
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      TZ: Asia/Shanghai
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ============ RocketMQ 5.x NameServer ============
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.1.4
+    container_name: ng-rocketmq-namesrv
+    restart: unless-stopped
+    ports:
+      - "9876:9876"
+    command: sh mqnamesrv
+    environment:
+      JAVA_OPT_EXT: "-Xms256m -Xmx256m"
+      TZ: Asia/Shanghai
+    volumes:
+      - rocketmq_namesrv_logs:/home/rocketmq/logs
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9876 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============ RocketMQ 5.x Broker ============
+  rocketmq-broker:
+    image: apache/rocketmq:5.1.4
+    container_name: ng-rocketmq-broker
+    restart: unless-stopped
+    ports:
+      - "10911:10911"
+      - "10909:10909"
+    command: sh mqbroker -n rocketmq-namesrv:9876 autoCreateTopicEnable=true
+    environment:
+      JAVA_OPT_EXT: "-Xms256m -Xmx256m"
+      TZ: Asia/Shanghai
+    volumes:
+      - rocketmq_broker_logs:/home/rocketmq/logs
+      - rocketmq_broker_store:/home/rocketmq/store
+    depends_on:
+      rocketmq-namesrv:
+        condition: service_healthy
+
+  # ============ RocketMQ Dashboard（可选，方便查看消息）============
+  rocketmq-dashboard:
+    image: apacherocketmq/rocketmq-dashboard:latest
+    container_name: ng-rocketmq-dashboard
+    restart: unless-stopped
+    ports:
+      - "8180:8080"
+    environment:
+      JAVA_OPTS: "-Drocketmq.namesrv.addr=rocketmq-namesrv:9876"
+      TZ: Asia/Shanghai
+    depends_on:
+      - rocketmq-namesrv
+      - rocketmq-broker
+
+  # ============ Nacos 2.x（服务注册 + 配置中心）============
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    container_name: ng-nacos
+    restart: unless-stopped
+    ports:
+      - "8848:8848"
+      - "9848:9848"   # gRPC 客户端请求端口
+      - "9849:9849"   # gRPC 服务端请求端口
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+      TZ: Asia/Shanghai
+      JVM_XMS: 256m
+      JVM_XMX: 256m
+    volumes:
+      - nacos_data:/home/nacos/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8848/nacos/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+# ============ 持久化卷 ============
+volumes:
+  pg_data:
+  redis_data:
+  minio_data:
+  qdrant_data:
+  es_data:
+  rocketmq_namesrv_logs:
+  rocketmq_broker_logs:
+  rocketmq_broker_store:
+  nacos_data:

@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: ng-biz
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  cloud:
+    nacos:
+      config:
+        server-addr: ${NACOS_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: DEFAULT_GROUP
+        file-extension: yaml
+        # 主配置文件：ng-biz.yaml
+        # 扩展配置（按序加载，后者覆盖前者）：
+        extension-configs:
+          - data-id: common-datasource.yaml
+            group: COMMON_GROUP
+            refresh: false
+          - data-id: common-redis.yaml
+            group: COMMON_GROUP
+            refresh: false
+          - data-id: common-rocketmq.yaml
+            group: COMMON_GROUP
+            refresh: false
+        # 共享配置（低优先级，适合多服务共用的基础配置）
+        shared-configs:
+          - data-id: common-jwt.yaml
+            group: COMMON_GROUP
+            refresh: false

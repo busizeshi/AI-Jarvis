@@ -1,0 +1,57 @@
+[tool.poetry]
+name = "note-gather-ai"
+version = "0.1.0"
+description = "拾笺 NoteGather · Python AI 端（文档解析 + RAG 检索问答）"
+authors = ["NoteGather"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+# ---- Web / RPC ----
+fastapi = "^0.111.0"
+uvicorn = { extras = ["standard"], version = "^0.30.1" }
+grpcio = "^1.65.1"
+grpcio-tools = "^1.65.1"
+protobuf = "^5.27.2"
+# ---- 配置 / 日志 ----
+pydantic = "^2.8.2"
+pydantic-settings = "^2.3.4"
+python-decouple = "^3.8"
+loguru = "^0.7.2"
+# ---- 向量 / 检索 ----
+qdrant-client = "^1.10.1"
+elasticsearch = "^8.14.0"
+# ---- 嵌入 / 分块 / LLM ----
+FlagEmbedding = "^1.2.10"          # BGE-M3
+langchain = "^0.2.11"
+langchain-text-splitters = "^0.2.2"
+litellm = "^1.41.23"
+# ---- 文本抽取 ----
+pdfminer-six = "^20240706"
+python-multipart = "^0.0.9"
+# ---- 存储 / MQ ----
+minio = "^7.2.7"
+rocketmq-client-python = "^2.0.0"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.4.2"
+isort = "^5.13.2"
+mypy = "^1.10.1"
+pytest = "^8.2.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true

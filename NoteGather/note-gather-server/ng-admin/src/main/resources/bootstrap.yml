@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: ng-admin
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  cloud:
+    nacos:
+      config:
+        server-addr: ${NACOS_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: DEFAULT_GROUP
+        file-extension: yaml
+        extension-configs:
+          - data-id: common-datasource.yaml
+            group: COMMON_GROUP
+            refresh: false
+          - data-id: common-redis.yaml
+            group: COMMON_GROUP
+            refresh: false
+        shared-configs:
+          - data-id: common-jwt.yaml
+            group: COMMON_GROUP
+            refresh: false

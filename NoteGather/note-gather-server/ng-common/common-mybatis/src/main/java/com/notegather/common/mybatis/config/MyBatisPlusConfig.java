@@ -16,14 +16,14 @@ public class MyBatisPlusConfig {
 
     /**
      * MyBatis-Plus 插件链
-     * - PaginationInnerInterceptor：分页（PostgreSQL）
+     * - PaginationInnerInterceptor：分页（MySQL）
      * - OptimisticLockerInnerInterceptor：乐观锁（@Version 注解支持）
      */
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
-        // 分页插件（PostgreSQL）
-        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.POSTGRE_SQL));
+        // 分页插件（MySQL）
+        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
         // 乐观锁插件
         interceptor.addInnerInterceptor(new OptimisticLockerInnerInterceptor());
         return interceptor;

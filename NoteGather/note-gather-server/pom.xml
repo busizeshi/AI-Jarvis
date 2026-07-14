@@ -34,7 +34,7 @@
         <!-- 持久层 -->
         <mybatis-plus.version>3.5.7</mybatis-plus.version>
         <druid.version>1.2.23</druid.version>
-        <postgresql.version>42.7.4</postgresql.version>
+        <mysql-connector.version>8.4.0</mysql-connector.version>
 
         <!-- 缓存 / 锁 -->
         <redisson.version>3.32.0</redisson.version>
@@ -149,9 +149,9 @@
                 <version>${druid.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.postgresql</groupId>
-                <artifactId>postgresql</artifactId>
-                <version>${postgresql.version}</version>
+                <groupId>com.mysql</groupId>
+                <artifactId>mysql-connector-j</artifactId>
+                <version>${mysql-connector.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.redisson</groupId>

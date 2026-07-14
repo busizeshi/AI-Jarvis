@@ -18,13 +18,14 @@ spring:
         namespace: ${NACOS_NAMESPACE:}
         file-extension: yaml
 
+  # 数据源（Druid + MySQL）
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
-      url: jdbc:postgresql://${PG_HOST:localhost}:${PG_PORT:5432}/${PG_DB:notegather}?serverTimezone=Asia/Shanghai
-      username: ${PG_USER:ng}
-      password: ${PG_PASSWORD:ng123456}
-      driver-class-name: org.postgresql.Driver
+      url: jdbc:mysql://${MYSQL_HOST:115.190.125.94}:${MYSQL_PORT:3306}/${MYSQL_DB:notegather}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      username: ${MYSQL_USER:root}
+      password: ${MYSQL_PASSWORD:JWDdmm@2552}
+      driver-class-name: com.mysql.cj.jdbc.Driver
       initial-size: 3
       min-idle: 3
       max-active: 10

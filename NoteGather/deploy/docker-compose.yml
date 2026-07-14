@@ -7,23 +7,28 @@ version: '3.8'
 
 services:
 
-  # ============ PostgreSQL 16 ============
-  postgres:
-    image: postgres:16-alpine
-    container_name: ng-postgres
+  # ============ MySQL 8.0 ============
+  mysql:
+    image: mysql:8.0
+    container_name: ng-mysql
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "3306:3306"
     environment:
-      POSTGRES_DB: notegather
-      POSTGRES_USER: ng
-      POSTGRES_PASSWORD: ng123456
+      MYSQL_DATABASE: notegather
+      MYSQL_USER: ng
+      MYSQL_PASSWORD: ng123456
+      MYSQL_ROOT_PASSWORD: root123456
       TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
       - ./sql:/docker-entrypoint-initdb.d   # 启动时自动执行 init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ng -d notegather"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot123456"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -179,7 +184,7 @@ services:
 
 # ============ 持久化卷 ============
 volumes:
-  pg_data:
+  mysql_data:
   redis_data:
   minio_data:
   qdrant_data:

@@ -20,7 +20,7 @@ spring:
         namespace: ${NACOS_NAMESPACE:}
         file-extension: yaml
 
-  # 数据源（Druid + PostgreSQL）
+  # 数据源（Druid + MySQL）
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     druid:

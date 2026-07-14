@@ -2,14 +2,12 @@ package com.notegather.common.grpc.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
 /**
  * gRPC 客户端配置属性（连接 Python AI 服务）
  * 配置项前缀：ng.grpc.ai
  */
 @Data
-@Component
 @ConfigurationProperties(prefix = "ng.grpc.ai")
 public class AiServiceProperties {
 

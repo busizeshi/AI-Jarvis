@@ -1,11 +1,13 @@
-# 开发环境覆盖配置（本地开发无需 Nacos，直接读 application.yml 中的配置）
 spring:
   cloud:
     nacos:
+      username: ${NACOS_USERNAME:nacos}
+      password: ${NACOS_PASSWORD:nacos}
       config:
-        # 开发期可设 enabled=false，禁用 Nacos 配置中心，走本地 application.yml
-        enabled: ${NACOS_CONFIG_ENABLED:false}
+        enabled: ${NACOS_CONFIG_ENABLED:true}
+        server-addr: ${NACOS_ADDR:10.142.244.123:8848}
+        namespace: ${NACOS_NAMESPACE:public}
       discovery:
-        server-addr: ${NACOS_ADDR:localhost:8848}
-        # 开发期服务注册可选关闭（单服务调试时）
-        register-enabled: ${NACOS_REGISTER_ENABLED:true}
+        server-addr: ${NACOS_ADDR:10.142.244.123:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        register-enabled: ${NACOS_REGISTER_ENABLED:false}

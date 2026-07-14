@@ -1,8 +1,13 @@
 spring:
   cloud:
     nacos:
+      username: ${NACOS_USERNAME:nacos}
+      password: ${NACOS_PASSWORD:nacos}
       config:
-        enabled: ${NACOS_CONFIG_ENABLED:false}
+        enabled: ${NACOS_CONFIG_ENABLED:true}
+        server-addr: ${NACOS_ADDR:10.142.244.123:8848}
+        namespace: ${NACOS_NAMESPACE:public}
       discovery:
-        server-addr: ${NACOS_ADDR:localhost:8848}
-        register-enabled: ${NACOS_REGISTER_ENABLED:true}
+        server-addr: ${NACOS_ADDR:10.142.244.123:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        register-enabled: ${NACOS_REGISTER_ENABLED:false}

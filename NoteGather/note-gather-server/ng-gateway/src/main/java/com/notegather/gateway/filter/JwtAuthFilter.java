@@ -7,7 +7,7 @@ import com.notegather.common.core.exception.BusinessException;
 import com.notegather.common.core.result.Result;
 import com.notegather.common.core.result.ResultCode;
 import com.notegather.common.security.config.JwtProperties;
-import com.notegather.common.security.model.LoginUser;
+import com.notegather.common.security.model.TokenPayload;
 import com.notegather.common.security.util.JwtUtils;
 import com.notegather.gateway.config.SecurityWhiteListProperties;
 import lombok.RequiredArgsConstructor;
@@ -28,17 +28,6 @@ import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
 
-/**
- * JWT 全局鉴权过滤器
- * <p>
- * 执行顺序（Order = -100，在限流过滤器之后、业务路由之前）：
- * 1. 白名单路径直接放行
- * 2. 提取 Bearer Token
- * 3. 查 Redis 黑名单（已登出 Token）
- * 4. 验证 Token 签名与有效期
- * 5. 透传 X-User-Id / X-Username 到下游
- * 6. 鉴权失败返回 401 JSON
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -49,10 +38,8 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
     private final SecurityWhiteListProperties whiteListProperties;
     private final ReactiveStringRedisTemplate reactiveRedisTemplate;
     private final ObjectMapper objectMapper;
-
     private final AntPathMatcher antPathMatcher = new AntPathMatcher();
 
-    /** 在 Sentinel 限流(-1)之后、路由转发之前执行 */
     @Override
     public int getOrder() {
         return -100;
@@ -61,83 +48,72 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getURI().getPath();
-
-        // 1. 白名单直接放行
         if (isWhiteListed(path)) {
-            return chain.filter(exchange);
+            return chain.filter(removeInternalHeaders(exchange));
         }
 
-        // 2. 提取 Token
         String authHeader = exchange.getRequest().getHeaders().getFirst(jwtProperties.getHeaderName());
         String token = jwtUtils.extractToken(authHeader);
         if (token == null) {
             return writeUnauthorized(exchange, ResultCode.UNAUTHORIZED);
         }
 
-        // 3. 查 Redis 黑名单（响应式，不阻塞事件循环）
-        String blacklistKey = CommonConstants.REDIS_TOKEN_BLACKLIST_PREFIX + token;
+        TokenPayload payload;
+        try {
+            payload = jwtUtils.parseAccessToken(token);
+        } catch (BusinessException e) {
+            return writeUnauthorized(exchange, resolveTokenError(e));
+        }
+
+        String blacklistKey = CommonConstants.REDIS_TOKEN_BLACKLIST_PREFIX + payload.getJti();
         return reactiveRedisTemplate.hasKey(blacklistKey)
-                .flatMap(inBlacklist -> {
-                    if (Boolean.TRUE.equals(inBlacklist)) {
-                        log.warn("[JwtAuthFilter] Token 在黑名单中, path={}", path);
-                        return writeUnauthorized(exchange, ResultCode.TOKEN_INVALID);
-                    }
-
-                    // 4. 验证 Token（JJWT 同步操作，纯 CPU，无 IO 阻塞）
-                    LoginUser loginUser;
-                    try {
-                        loginUser = jwtUtils.parseToken(token);
-                    } catch (BusinessException e) {
-                        ResultCode resultCode = (e.getCode() == ResultCode.TOKEN_EXPIRED.getCode())
-                                ? ResultCode.TOKEN_EXPIRED
-                                : ResultCode.TOKEN_INVALID;
-                        log.warn("[JwtAuthFilter] Token 验证失败: code={}, path={}", resultCode.getCode(), path);
-                        return writeUnauthorized(exchange, resultCode);
-                    }
-
-                    // 5. 透传用户信息到下游（覆盖原始请求头，防止客户端伪造）
-                    ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
-                            .header(CommonConstants.HEADER_USER_ID, loginUser.getUserId())
-                            .header(CommonConstants.HEADER_USERNAME,
-                                    loginUser.getUsername() != null ? loginUser.getUsername() : "")
-                            // 移除原始 Authorization，下游服务通过 X-User-Id 识别用户
-                            .headers(headers -> headers.remove(CommonConstants.HEADER_AUTHORIZATION))
-                            .build();
-
-                    return chain.filter(exchange.mutate().request(mutatedRequest).build());
-                })
+                .flatMap(inBlacklist -> Boolean.TRUE.equals(inBlacklist)
+                        ? writeUnauthorized(exchange, ResultCode.TOKEN_INVALID)
+                        : chain.filter(withTrustedUserHeaders(exchange, payload)))
                 .onErrorResume(ex -> {
-                    log.error("[JwtAuthFilter] Redis 黑名单查询异常, path={}", path, ex);
-                    // Redis 不可用时降级：继续尝试验证 Token（可按需改为拒绝）
-                    return fallbackWithTokenOnly(exchange, chain, token, path);
+                    log.error("[JwtAuthFilter] Redis blacklist check failed path={}", path, ex);
+                    return writeUnavailable(exchange);
                 });
     }
 
-    /**
-     * Redis 不可用时的降级逻辑：仅凭 Token 有效性决策
-     */
-    private Mono<Void> fallbackWithTokenOnly(ServerWebExchange exchange,
-                                             GatewayFilterChain chain,
-                                             String token,
-                                             String path) {
-        try {
-            LoginUser loginUser = jwtUtils.parseToken(token);
-            ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
-                    .header(CommonConstants.HEADER_USER_ID, loginUser.getUserId())
-                    .header(CommonConstants.HEADER_USERNAME,
-                            loginUser.getUsername() != null ? loginUser.getUsername() : "")
-                    .headers(headers -> headers.remove(CommonConstants.HEADER_AUTHORIZATION))
-                    .build();
-            return chain.filter(exchange.mutate().request(mutatedRequest).build());
-        } catch (BusinessException e) {
-            ResultCode resultCode = (e.getCode() == ResultCode.TOKEN_EXPIRED.getCode())
-                    ? ResultCode.TOKEN_EXPIRED
-                    : ResultCode.TOKEN_INVALID;
-            return writeUnauthorized(exchange, resultCode);
-        }
+    private ServerWebExchange removeInternalHeaders(ServerWebExchange exchange) {
+        ServerHttpRequest request = exchange.getRequest().mutate()
+                .headers(headers -> {
+                    headers.remove(CommonConstants.HEADER_USER_ID);
+                    headers.remove(CommonConstants.HEADER_USERNAME);
+                    headers.remove(CommonConstants.HEADER_TOKEN_JTI);
+                    headers.remove(CommonConstants.HEADER_TOKEN_EXPIRES_AT);
+                })
+                .build();
+        return exchange.mutate().request(request).build();
     }
 
-    // ==================== 工具方法 ====================
+    private ServerWebExchange withTrustedUserHeaders(ServerWebExchange exchange, TokenPayload payload) {
+        ServerHttpRequest request = exchange.getRequest().mutate()
+                .headers(headers -> {
+                    headers.remove(CommonConstants.HEADER_AUTHORIZATION);
+                    headers.remove(CommonConstants.HEADER_USER_ID);
+                    headers.remove(CommonConstants.HEADER_USERNAME);
+                    headers.remove(CommonConstants.HEADER_TOKEN_JTI);
+                    headers.remove(CommonConstants.HEADER_TOKEN_EXPIRES_AT);
+                })
+                .header(CommonConstants.HEADER_USER_ID, payload.getUserId())
+                .header(CommonConstants.HEADER_USERNAME, payload.getUsername() == null ? "" : payload.getUsername())
+                .header(CommonConstants.HEADER_TOKEN_JTI, payload.getJti())
+                .header(CommonConstants.HEADER_TOKEN_EXPIRES_AT, String.valueOf(payload.getExpiresAt().toEpochMilli()))
+                .build();
+        return exchange.mutate().request(request).build();
+    }
+
+    private ResultCode resolveTokenError(BusinessException e) {
+        if (e.getCode() == ResultCode.TOKEN_EXPIRED.getCode()) {
+            return ResultCode.TOKEN_EXPIRED;
+        }
+        if (e.getCode() == ResultCode.TOKEN_TYPE_INVALID.getCode()) {
+            return ResultCode.TOKEN_TYPE_INVALID;
+        }
+        return ResultCode.TOKEN_INVALID;
+    }
 
     private boolean isWhiteListed(String path) {
         return whiteListProperties.getWhiteList().stream()
@@ -145,20 +121,25 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
     }
 
     private Mono<Void> writeUnauthorized(ServerWebExchange exchange, ResultCode resultCode) {
-        ServerHttpResponse response = exchange.getResponse();
-        response.setStatusCode(HttpStatus.UNAUTHORIZED);
-        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        return writeJson(exchange, HttpStatus.UNAUTHORIZED, Result.fail(resultCode));
+    }
 
+    private Mono<Void> writeUnavailable(ServerWebExchange exchange) {
+        return writeJson(exchange, HttpStatus.SERVICE_UNAVAILABLE, Result.fail(ResultCode.SERVICE_UNAVAILABLE));
+    }
+
+    private Mono<Void> writeJson(ServerWebExchange exchange, HttpStatus status, Result<Void> result) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(status);
+        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
         byte[] bytes;
         try {
-            bytes = objectMapper.writeValueAsBytes(Result.fail(resultCode));
+            bytes = objectMapper.writeValueAsBytes(result);
         } catch (JsonProcessingException e) {
-            // 序列化失败时用手动拼接兜底
             String fallback = String.format("{\"code\":%d,\"message\":\"%s\"}",
-                    resultCode.getCode(), resultCode.getMessage());
+                    result.getCode(), result.getMessage());
             bytes = fallback.getBytes(StandardCharsets.UTF_8);
         }
-
         DataBuffer buffer = response.bufferFactory().wrap(bytes);
         return response.writeWith(Mono.just(buffer));
     }

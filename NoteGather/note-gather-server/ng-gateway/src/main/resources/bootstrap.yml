@@ -6,11 +6,11 @@ spring:
   cloud:
     nacos:
       config:
-        server-addr: ${NACOS_ADDR:localhost:8848}
-        namespace: ${NACOS_NAMESPACE:}
+        server-addr: ${NACOS_ADDR:10.142.244.123:8848}
+        namespace: ${NACOS_NAMESPACE:public}
         group: DEFAULT_GROUP
         file-extension: yaml
         shared-configs:
-          - data-id: common-jwt.yaml
+          - data-id: common.yaml
             group: COMMON_GROUP
             refresh: false

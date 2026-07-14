@@ -12,11 +12,11 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: ${NACOS_ADDR:localhost:8848}
+        server-addr: ${NACOS_ADDR:115.190.125.94:8848}
         namespace: ${NACOS_NAMESPACE:}
         group: DEFAULT_GROUP
       config:
-        server-addr: ${NACOS_ADDR:localhost:8848}
+        server-addr: ${NACOS_ADDR:115.190.125.94:8848}
         namespace: ${NACOS_NAMESPACE:}
         file-extension: yaml
 
@@ -24,21 +24,26 @@ spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
-      url: jdbc:postgresql://${PG_HOST:localhost}:${PG_PORT:5432}/${PG_DB:notegather}?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8
-      username: ${PG_USER:ng}
-      password: ${PG_PASSWORD:ng123456}
-      driver-class-name: org.postgresql.Driver
+      url: jdbc:mysql://${MYSQL_HOST:115.190.125.94}:${MYSQL_PORT:3306}/${MYSQL_DB:notegather}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      username: ${MYSQL_USER:root}
+      password: ${MYSQL_PASSWORD:JWDdmm@2552}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+
       initial-size: 5
       min-idle: 5
       max-active: 20
       max-wait: 60000
+
       time-between-eviction-runs-millis: 60000
       min-evictable-idle-time-millis: 300000
+
       validation-query: SELECT 1
       test-while-idle: true
       test-on-borrow: false
       test-on-return: false
+
       filters: stat,wall
+
       stat-view-servlet:
         enabled: true
         url-pattern: /druid/*
@@ -49,7 +54,7 @@ spring:
   # Redis（Redisson 自动识别）
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
+      host: ${REDIS_HOST:115.190.125.94}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       database: 0
@@ -95,7 +100,7 @@ dubbo:
   application:
     name: ${spring.application.name}
   registry:
-    address: nacos://${NACOS_ADDR:localhost:8848}
+    address: nacos://${NACOS_ADDR:115.190.125.94:8848}
     protocol: nacos
   protocol:
     name: dubbo

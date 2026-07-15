@@ -1,114 +1,127 @@
-"""
-search_service/retriever.py
-混合检索：Qdrant 向量检索 + ES BM25 关键词检索，结果合并去重。
-第一阶段：简单 score 归一化合并（RRF 融合）。
-"""
+"""Hybrid retrieval backed by Qdrant, Elasticsearch, and RRF."""
 from __future__ import annotations
 
+from typing import Any, Literal, TypedDict
+
+from elastic_transport import ConnectionError as ElasticsearchConnectionError
+from elastic_transport import ConnectionTimeout
+from elasticsearch import ApiError
 from loguru import logger
+from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
+
 from shared.config import get_settings
 from shared.embedder import embed_query
-from shared.qdrant_store import get_qdrant_client, user_collection
 from shared.es_client import get_es_client, user_index
+from shared.qdrant_store import get_qdrant_client, user_collection
+
+RRF_RANK_CONSTANT = 60
 
 
-def _vector_search(user_id: str, query_vec: list[float], top_k: int) -> list[dict]:
-    """Qdrant 向量检索，返回 top_k 个 chunk。"""
+class RetrievalHit(TypedDict):
+    note_id: str
+    file_id: str
+    note_title: str
+    chunk_text: str
+    chunk_idx: int
+    score: float
+    source: Literal["vector", "bm25"]
+
+
+def _normalise_hit(payload: dict[str, Any], score: float, source: Literal["vector", "bm25"]) -> RetrievalHit | None:
+    note_id = str(payload.get("note_id") or "").strip()
+    file_id = str(payload.get("file_id") or "").strip()
+    note_title = str(payload.get("note_title") or "").strip()
+    chunk_text = str(payload.get("chunk_text") or "").strip()
+    if not note_id or not file_id or not note_title or not chunk_text:
+        logger.warning("Skip incomplete retrieval hit source={} note_id={} file_id={}", source, note_id, file_id)
+        return None
     try:
-        client = get_qdrant_client()
-        col = user_collection(user_id)
-        results = client.search(
-            collection_name=col,
-            query_vector=query_vec,
-            limit=top_k,
+        chunk_idx = int(payload.get("chunk_idx", 0))
+    except (TypeError, ValueError):
+        logger.warning("Skip retrieval hit with invalid chunk index source={} file_id={}", source, file_id)
+        return None
+    return {
+        "note_id": note_id,
+        "file_id": file_id,
+        "note_title": note_title,
+        "chunk_text": chunk_text,
+        "chunk_idx": chunk_idx,
+        "score": float(score),
+        "source": source,
+    }
+
+
+def _vector_search(user_id: str, query_vec: list[float], top_k: int) -> list[RetrievalHit]:
+    try:
+        results = get_qdrant_client().search(
+            collection_name=user_collection(user_id), query_vector=query_vec, limit=top_k
         )
-        return [
-            {
-                "note_id":    r.payload.get("note_id", ""),
-                "file_id":    r.payload.get("file_id", ""),
-                "chunk_text": r.payload.get("chunk_text", ""),
-                "chunk_idx":  r.payload.get("chunk_idx", 0),
-                "score":      r.score,
-                "source":     "vector",
-            }
-            for r in results
-        ]
-    except Exception as e:
-        logger.warning("向量检索失败 user_id={} error={}", user_id, e)
+    except (OSError, TimeoutError, ResponseHandlingException, UnexpectedResponse) as error:
+        logger.warning("Vector retrieval unavailable user_id={} error={}", user_id, error)
         return []
 
+    hits: list[RetrievalHit] = []
+    for result in results:
+        hit = _normalise_hit(result.payload or {}, result.score, "vector")
+        if hit is not None:
+            hits.append(hit)
+    return hits
 
-def _bm25_search(user_id: str, query: str, top_k: int) -> list[dict]:
-    """ES BM25 检索，返回 top_k 个 chunk。"""
+
+def _bm25_search(user_id: str, query: str, top_k: int) -> list[RetrievalHit]:
     try:
-        es = get_es_client()
-        idx = user_index(user_id)
-        resp = es.search(
-            index=idx,
+        response = get_es_client().search(
+            index=user_index(user_id),
             body={
                 "query": {"match": {"chunk_text": {"query": query, "operator": "or"}}},
                 "size": top_k,
             },
         )
-        return [
-            {
-                "note_id":    hit["_source"].get("note_id", ""),
-                "file_id":    hit["_source"].get("file_id", ""),
-                "chunk_text": hit["_source"].get("chunk_text", ""),
-                "chunk_idx":  hit["_source"].get("chunk_idx", 0),
-                "score":      hit["_score"],
-                "source":     "bm25",
-            }
-            for hit in resp["hits"]["hits"]
-        ]
-    except Exception as e:
-        logger.warning("BM25 检索失败 user_id={} error={}", user_id, e)
+    except (ApiError, ElasticsearchConnectionError, ConnectionTimeout, OSError, TimeoutError) as error:
+        logger.warning("BM25 retrieval unavailable user_id={} error={}", user_id, error)
         return []
 
-
-def _rrf_merge(vec_results: list[dict], bm25_results: list[dict], k: int = 60) -> list[dict]:
-    """
-    Reciprocal Rank Fusion 合并两路结果。
-    chunk 唯一标识：(file_id, chunk_idx)
-    """
-    scores: dict[tuple, float] = {}
-    data:   dict[tuple, dict]  = {}
-
-    for rank, r in enumerate(vec_results):
-        key = (r["file_id"], r["chunk_idx"])
-        scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank + 1)
-        data[key] = r
-
-    for rank, r in enumerate(bm25_results):
-        key = (r["file_id"], r["chunk_idx"])
-        scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank + 1)
-        if key not in data:
-            data[key] = r
-
-    merged = sorted(scores.keys(), key=lambda k: scores[k], reverse=True)
-    result = []
-    for key in merged:
-        item = data[key].copy()
-        item["score"] = scores[key]
-        result.append(item)
-    return result
+    hits: list[RetrievalHit] = []
+    for result in response.get("hits", {}).get("hits", []):
+        hit = _normalise_hit(result.get("_source", {}), result.get("_score") or 0.0, "bm25")
+        if hit is not None:
+            hits.append(hit)
+    return hits
 
 
-def hybrid_retrieve(user_id: str, query: str, top_k: int) -> list[dict]:
-    """
-    混合检索主入口，返回 rerank 后的 top_k 个 chunk（含 note_id/chunk_text/score）。
-    """
+def _rrf_merge(vector_hits: list[RetrievalHit], bm25_hits: list[RetrievalHit]) -> list[RetrievalHit]:
+    scores: dict[tuple[str, str, int], float] = {}
+    hits: dict[tuple[str, str, int], RetrievalHit] = {}
+    for ranked_hits in (vector_hits, bm25_hits):
+        for rank, hit in enumerate(ranked_hits, start=1):
+            key = (hit["note_id"], hit["file_id"], hit["chunk_idx"])
+            scores[key] = scores.get(key, 0.0) + 1.0 / (RRF_RANK_CONSTANT + rank)
+            hits.setdefault(key, hit)
+
+    merged: list[RetrievalHit] = []
+    for key in sorted(scores, key=scores.get, reverse=True):
+        hit = hits[key].copy()
+        hit["score"] = scores[key]
+        merged.append(hit)
+    return merged
+
+
+def hybrid_retrieve(user_id: str, query: str, top_k: int) -> list[RetrievalHit]:
+    """Return user-isolated RRF results with citation fields ready for persistence."""
+    if not user_id or not query.strip():
+        return []
+
     settings = get_settings()
-    retrieve_k = settings.retrieve_top_k
-    rerank_k = min(settings.rerank_top_k, top_k)
-
-    query_vec = embed_query(query)
-    vec_results  = _vector_search(user_id, query_vec, retrieve_k)
-    bm25_results = _bm25_search(user_id, query, retrieve_k)
-
-    merged = _rrf_merge(vec_results, bm25_results)
+    result_limit = min(settings.rerank_top_k, max(top_k, 1))
+    query_vector = embed_query(query)
+    vector_hits = _vector_search(user_id, query_vector, settings.retrieve_top_k)
+    bm25_hits = _bm25_search(user_id, query, settings.retrieve_top_k)
+    merged = _rrf_merge(vector_hits, bm25_hits)
     logger.debug(
-        "混合检索完成 user_id={} vec={} bm25={} merged={}",
-        user_id, len(vec_results), len(bm25_results), len(merged),
+        "Hybrid retrieval completed user_id={} vector={} bm25={} merged={}",
+        user_id,
+        len(vector_hits),
+        len(bm25_hits),
+        len(merged),
     )
-    return merged[:rerank_k]
+    return merged[:result_limit]

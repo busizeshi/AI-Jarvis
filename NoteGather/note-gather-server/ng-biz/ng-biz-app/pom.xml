@@ -18,11 +18,6 @@
         <!-- 聚合全部业务模块 -->
         <dependency>
             <groupId>com.notegather</groupId>
-            <artifactId>module-user</artifactId>
-            <version>${revision}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.notegather</groupId>
             <artifactId>module-knowledge</artifactId>
             <version>${revision}</version>
         </dependency>

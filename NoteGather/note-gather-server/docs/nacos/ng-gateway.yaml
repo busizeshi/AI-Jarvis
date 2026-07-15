@@ -1,0 +1,57 @@
+server:
+  port: 9003
+  shutdown: graceful
+
+spring:
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        - id: ng-admin-user
+          uri: lb://ng-admin
+          predicates:
+            - Path=/api/v1/user/**
+          filters:
+            - StripPrefix=0
+        - id: ng-biz
+          uri: lb://ng-biz
+          predicates:
+            - Path=/api/v1/**
+          filters:
+            - StripPrefix=0
+        - id: ng-admin
+          uri: lb://ng-admin
+          predicates:
+            - Path=/admin/**
+          filters:
+            - StripPrefix=0
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origin-patterns: "*"
+            allowed-methods: "*"
+            allowed-headers: "*"
+            allow-credentials: true
+            max-age: 3600
+
+ng:
+  security:
+    white-list:
+      - /api/v1/user/register
+      - /api/v1/user/login
+      - /api/v1/user/refresh-token
+      - /actuator/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    com.notegather: DEBUG
+    org.springframework.cloud.gateway: INFO

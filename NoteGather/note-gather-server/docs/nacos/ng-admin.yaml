@@ -1,0 +1,50 @@
+server:
+  port: 9002
+  shutdown: graceful
+
+spring:
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      url: jdbc:mysql://115.190.125.94:3306/notegather?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      username: root
+      password: JWDdmm@2552
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      initial-size: 3
+      min-idle: 3
+      max-active: 10
+  data:
+    redis:
+      database: 1
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+      id-type: assign_id
+
+dubbo:
+  application:
+    name: ng-admin
+  registry:
+    address: nacos://10.142.244.123:8848
+    protocol: nacos
+    username: nacos
+    password: nacos
+    check: false
+  protocol:
+    name: dubbo
+    port: -1
+  consumer:
+    check: false
+  scan:
+    base-packages: com.notegather
+
+logging:
+  level:
+    com.notegather: DEBUG

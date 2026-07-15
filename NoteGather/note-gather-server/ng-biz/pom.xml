@@ -16,7 +16,6 @@
     <description>拾笺 NoteGather C 端核心业务服务（聚合模块）</description>
 
     <modules>
-        <module>module-user</module>
         <module>module-knowledge</module>
         <module>module-file</module>
         <module>module-ai</module>

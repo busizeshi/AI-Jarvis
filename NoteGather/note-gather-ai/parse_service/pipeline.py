@@ -1,140 +1,251 @@
-"""
-parse_service/pipeline.py
-文档解析流水线：
-  下载文件 → 文本抽取 → 分块 → BGE-M3 嵌入 → 写入 Qdrant + ES
-"""
+"""文件解析、索引和结果事件发布流水线。"""
 from __future__ import annotations
 
-from loguru import logger
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+import io
 
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from loguru import logger
+
+from parse_service.chunk_identity import stable_chunk_id
+from parse_service.producer import publish_parse_result
 from shared.config import get_settings
 from shared.embedder import embed_texts
+from shared.es_client import ensure_index, get_es_client, user_index
 from shared.minio_client import download_file
-from shared.qdrant_store import ensure_collection, user_collection
-from shared.es_client import ensure_index, user_index
+from shared.qdrant_store import ensure_collection, get_qdrant_client, user_collection
 
 try:
-    from qdrant_client.models import PointStruct
-    from qdrant_client import QdrantClient
-    from shared.qdrant_store import get_qdrant_client
-    _HAS_QDRANT = True
-except ImportError:
-    _HAS_QDRANT = False
+    from elasticsearch.helpers import bulk
+    from qdrant_client.models import FieldCondition, Filter, MatchValue, PointStruct
 
-try:
-    from shared.es_client import get_es_client
-    _HAS_ES = True
+    _HAS_INDEX_CLIENTS = True
 except ImportError:
-    _HAS_ES = False
+    _HAS_INDEX_CLIENTS = False
+
+
+class ParseRetryableError(RuntimeError):
+    """本次解析已失败但仍可由 RocketMQ 重投。"""
 
 
 def _extract_text(content: bytes, file_type: str) -> str:
-    """从原始字节抽取纯文本。支持 PDF / TXT / MD。"""
-    ft = file_type.upper()
-    if ft == "PDF":
+    """从 PDF、TXT 或 Markdown 原始内容提取纯文本。"""
+    if file_type.upper() == "PDF":
         from pdfminer.high_level import extract_text as pdf_extract
-        import io
+
         return pdf_extract(io.BytesIO(content))
-    # TXT / MD / 其他，直接 UTF-8 解码
     return content.decode("utf-8", errors="replace")
 
 
 def run_parse_pipeline(
+    *,
     file_id: str,
+    parse_task_id: str,
     user_id: str,
     note_id: str,
+    note_title: str,
     object_key: str,
     bucket: str,
     file_type: str,
+    attempt_count: int,
 ) -> None:
-    """
-    完整解析流水线入口（同步，在消费者线程中执行）。
-    成功后通过 RocketMQ 发布 PARSE_DONE，失败发布 PARSE_FAILED。
-    """
+    """执行一次解析；可重试错误会发布中间失败状态后抛出。"""
+    try:
+        chunk_count = _parse_and_index(
+            file_id=file_id,
+            user_id=user_id,
+            note_id=note_id,
+            note_title=note_title,
+            object_key=object_key,
+            bucket=bucket,
+            file_type=file_type,
+        )
+    except Exception as error:
+        _handle_parse_error(
+            file_id=file_id,
+            parse_task_id=parse_task_id,
+            note_id=note_id,
+            attempt_count=attempt_count,
+            error=error,
+        )
+        return
+    _send_parse_done(file_id, parse_task_id, note_id, chunk_count, attempt_count)
+
+
+def _parse_and_index(
+    *,
+    file_id: str,
+    user_id: str,
+    note_id: str,
+    note_title: str,
+    object_key: str,
+    bucket: str,
+    file_type: str,
+) -> int:
     settings = get_settings()
     logger.info("开始解析 file_id={} file_type={}", file_id, file_type)
+    content = download_file(bucket, object_key)
+    text = _extract_text(content, file_type)
+    if not text.strip():
+        raise ValueError("提取文本为空")
+    chunks = RecursiveCharacterTextSplitter(
+        chunk_size=settings.chunk_size,
+        chunk_overlap=settings.chunk_overlap,
+    ).split_text(text)
+    if not chunks:
+        raise ValueError("文本分块为空")
+    vectors = embed_texts(chunks)
+    if len(vectors) != len(chunks):
+        raise ValueError("向量数量与文本分块数量不一致")
+    _replace_indexes(file_id, user_id, note_id, note_title, chunks, vectors)
+    logger.info("解析完成 file_id={} chunks={}", file_id, len(chunks))
+    return len(chunks)
 
-    try:
-        # 1. 下载文件
-        content = download_file(bucket, object_key)
-        logger.debug("文件下载完成 file_id={} size={}", file_id, len(content))
 
-        # 2. 文本抽取
-        text = _extract_text(content, file_type)
-        if not text.strip():
-            raise ValueError("抽取文本为空")
+def _replace_indexes(
+    file_id: str,
+    user_id: str,
+    note_id: str,
+    note_title: str,
+    chunks: list[str],
+    vectors: list[list[float]],
+) -> None:
+    if not _HAS_INDEX_CLIENTS:
+        raise RuntimeError("Qdrant 或 Elasticsearch 客户端依赖未安装")
+    _replace_qdrant(file_id, user_id, note_id, note_title, chunks, vectors)
+    _replace_elasticsearch(file_id, user_id, note_id, note_title, chunks)
 
-        # 3. 分块
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=settings.chunk_size,
-            chunk_overlap=settings.chunk_overlap,
+
+def _replace_qdrant(
+    file_id: str,
+    user_id: str,
+    note_id: str,
+    note_title: str,
+    chunks: list[str],
+    vectors: list[list[float]],
+) -> None:
+    collection_name = user_collection(user_id)
+    ensure_collection(collection_name)
+    client = get_qdrant_client()
+    client.delete(
+        collection_name=collection_name,
+        points_selector=Filter(
+            must=[FieldCondition(key="file_id", match=MatchValue(value=file_id))]
+        ),
+    )
+    points = [
+        PointStruct(
+            id=stable_chunk_id(file_id, index),
+            vector=vectors[index],
+            payload={
+                "file_id": file_id,
+                "note_id": note_id,
+                "note_title": note_title,
+                "user_id": user_id,
+                "chunk_idx": index,
+                "chunk_text": chunks[index],
+            },
         )
-        chunks: list[str] = splitter.split_text(text)
-        logger.debug("分块完成 file_id={} chunks={}", file_id, len(chunks))
-
-        # 4. 向量嵌入
-        vectors = embed_texts(chunks)
-
-        # 5. 写入 Qdrant
-        if _HAS_QDRANT:
-            col = user_collection(user_id)
-            ensure_collection(col)
-            client: QdrantClient = get_qdrant_client()
-            points = [
-                PointStruct(
-                    id=abs(hash(f"{file_id}_{i}")) % (2 ** 63),  # 确定性 uint64 ID
-                    vector=vectors[i],
-                    payload={
-                        "file_id": file_id,
-                        "note_id": note_id,
-                        "user_id": user_id,
-                        "chunk_idx": i,
-                        "chunk_text": chunks[i],
-                    },
-                )
-                for i in range(len(chunks))
-            ]
-            client.upsert(collection_name=col, points=points)
-            logger.debug("Qdrant 写入完成 file_id={} points={}", file_id, len(points))
-
-        # 6. 写入 ES（BM25 索引）
-        if _HAS_ES:
-            idx = user_index(user_id)
-            ensure_index(idx)
-            es = get_es_client()
-            from elasticsearch.helpers import bulk
-            actions = [
-                {
-                    "_index": idx,
-                    "_id": f"{file_id}_{i}",
-                    "_source": {
-                        "note_id": note_id,
-                        "file_id": file_id,
-                        "user_id": user_id,
-                        "chunk_text": chunks[i],
-                        "chunk_idx": i,
-                    },
-                }
-                for i in range(len(chunks))
-            ]
-            bulk(es, actions)
-            logger.debug("ES 写入完成 file_id={} docs={}", file_id, len(actions))
-
-        logger.info("解析完成 file_id={} chunks={}", file_id, len(chunks))
-        _send_parse_done(file_id, note_id, len(chunks))
-
-    except Exception as e:
-        logger.exception("解析失败 file_id={} error={}", file_id, e)
-        _send_parse_failed(file_id, note_id, str(e))
+        for index in range(len(chunks))
+    ]
+    client.upsert(collection_name=collection_name, points=points, wait=True)
 
 
-def _send_parse_done(file_id: str, note_id: str, chunk_count: int) -> None:
-    """发布 PARSE_DONE 消息到 Java 服务（可选，走 RocketMQ）。"""
-    # TODO: 使用 rocketmq Producer 发送 ParseDoneMessage JSON
-    logger.info("TODO: 发送 PARSE_DONE file_id={} chunks={}", file_id, chunk_count)
+def _replace_elasticsearch(
+    file_id: str,
+    user_id: str,
+    note_id: str,
+    note_title: str,
+    chunks: list[str],
+) -> None:
+    index_name = user_index(user_id)
+    ensure_index(index_name)
+    client = get_es_client()
+    client.delete_by_query(
+        index=index_name,
+        query={"term": {"file_id": file_id}},
+        conflicts="proceed",
+        refresh=False,
+    )
+    actions = [
+        {
+            "_index": index_name,
+            "_id": f"{file_id}_{index}",
+            "_source": {
+                "note_id": note_id,
+                "note_title": note_title,
+                "file_id": file_id,
+                "user_id": user_id,
+                "chunk_text": chunks[index],
+                "chunk_idx": index,
+            },
+        }
+        for index in range(len(chunks))
+    ]
+    bulk(client, actions, refresh="wait_for")
 
 
-def _send_parse_failed(file_id: str, note_id: str, error_msg: str) -> None:
-    """发布 PARSE_FAILED 消息。"""
-    logger.info("TODO: 发送 PARSE_FAILED file_id={} error={}", file_id, error_msg)
+def _handle_parse_error(
+    *,
+    file_id: str,
+    parse_task_id: str,
+    note_id: str,
+    attempt_count: int,
+    error: Exception,
+) -> None:
+    settings = get_settings()
+    final_failed = attempt_count >= settings.parse_max_attempts
+    logger.exception(
+        "解析失败 file_id={} task_id={} attempt={} final={}",
+        file_id,
+        parse_task_id,
+        attempt_count,
+        final_failed,
+    )
+    _send_parse_failed(file_id, parse_task_id, note_id, str(error), attempt_count, final_failed)
+    if not final_failed:
+        raise ParseRetryableError(f"解析失败，等待第 {attempt_count + 1} 次尝试") from error
+
+
+def _send_parse_done(
+    file_id: str,
+    parse_task_id: str,
+    note_id: str,
+    chunk_count: int,
+    attempt_count: int,
+) -> None:
+    publish_parse_result(
+        "PARSE_DONE",
+        {
+            "fileId": file_id,
+            "parseTaskId": parse_task_id,
+            "noteId": note_id,
+            "status": "DONE",
+            "chunkCount": chunk_count,
+            "errorMsg": None,
+            "attemptCount": attempt_count,
+            "finalFailed": False,
+        },
+    )
+
+
+def _send_parse_failed(
+    file_id: str,
+    parse_task_id: str,
+    note_id: str,
+    error_msg: str,
+    attempt_count: int,
+    final_failed: bool,
+) -> None:
+    publish_parse_result(
+        "PARSE_FAILED",
+        {
+            "fileId": file_id,
+            "parseTaskId": parse_task_id,
+            "noteId": note_id,
+            "status": "FAILED",
+            "chunkCount": 0,
+            "errorMsg": error_msg,
+            "attemptCount": attempt_count,
+            "finalFailed": final_failed,
+        },
+    )

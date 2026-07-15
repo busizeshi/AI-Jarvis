@@ -22,6 +22,9 @@ public class ParseDoneMessage implements Serializable {
     /** 关联笔记ID */
     private String noteId;
 
+    /** 对应的解析任务ID */
+    private String parseTaskId;
+
     /** 解析状态：DONE / FAILED */
     private String status;
 
@@ -30,4 +33,10 @@ public class ParseDoneMessage implements Serializable {
 
     /** 失败原因（status=FAILED 时填充） */
     private String errorMsg;
+
+    /** 当前消息对应的解析尝试次数，从 1 开始 */
+    private Integer attemptCount;
+
+    /** 是否已经达到重试上限并进入最终失败 */
+    private Boolean finalFailed;
 }

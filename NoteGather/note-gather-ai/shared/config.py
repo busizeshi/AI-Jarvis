@@ -3,6 +3,7 @@ shared/config.py
 所有配置通过环境变量（.env.dev / .env.prod）注入，使用 pydantic-settings 管理。
 """
 from functools import lru_cache
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -43,6 +44,8 @@ class Settings(BaseSettings):
     rocketmq_namesrv: str = "localhost:9876"
     rocketmq_file_topic: str = "NG_FILE_TOPIC"
     rocketmq_consumer_group: str = "ng_parse_consumer_group"
+    rocketmq_producer_group: str = "ng_parse_producer_group"
+    parse_max_attempts: int = Field(default=3, ge=1)
 
     # ---- 嵌入模型 ----
     embedding_model: str = "BAAI/bge-m3"
@@ -57,11 +60,11 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4o-mini"
     llm_api_base: str = ""
     llm_api_key: str = ""
-    llm_temperature: float = 0.3
+    llm_temperature: float = Field(default=0.3, ge=0, le=2)
 
     # ---- 检索 ----
-    retrieve_top_k: int = 10
-    rerank_top_k: int = 5
+    retrieve_top_k: int = Field(default=10, ge=1)
+    rerank_top_k: int = Field(default=5, ge=1)
 
     # ---- 日志 ----
     log_level: str = "INFO"

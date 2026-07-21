@@ -44,4 +44,21 @@ public class MybatisUserRepository implements UserRepository {
         user.setStatus(status);
         return userMapper.updateById(user) > 0;
     }
+
+    @Override
+    public boolean updateAvatarUrl(Long userId, String avatarUrl) {
+        User user = new User();
+        user.setId(userId);
+        user.setAvatarUrl(avatarUrl);
+        return userMapper.updateById(user) > 0;
+    }
+
+    @Override
+    public boolean updateProfile(Long userId, String nickname, String bio) {
+        User user = new User();
+        user.setId(userId);
+        user.setNickname(nickname);
+        user.setBio(bio);
+        return userMapper.updateById(user) > 0;
+    }
 }

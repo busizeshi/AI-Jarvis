@@ -12,12 +12,17 @@ public final class UserAssembler {
         if (user == null) {
             return null;
         }
+        String createTimeStr = user.getCreateTime() != null
+                ? user.getCreateTime().toString() + "Z"
+                : null;
         return UserResponse.builder()
                 .userId(String.valueOf(user.getId()))
                 .username(user.getUsername())
                 .nickname(user.getNickname())
                 .avatarUrl(user.getAvatarUrl())
+                .bio(user.getBio())
                 .status(user.getStatus())
+                .createTime(createTimeStr)
                 .build();
     }
 

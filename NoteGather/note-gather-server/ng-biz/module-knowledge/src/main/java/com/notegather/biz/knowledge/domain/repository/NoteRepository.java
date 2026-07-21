@@ -10,9 +10,13 @@ public interface NoteRepository {
 
     Note findByIdAndUserId(Long noteId, Long userId);
 
+    Note findById(Long noteId);
+
     void updateParseStatus(Long noteId, Long userId, String parseStatus);
 
     Note findDeletedByIdAndUserId(Long noteId, Long userId);
+
+    List<Note> findActiveByTitle(Long userId, Long libraryId, String title);
 
     List<Note> findByLibraryId(Long libraryId, Long userId, boolean deleted);
 

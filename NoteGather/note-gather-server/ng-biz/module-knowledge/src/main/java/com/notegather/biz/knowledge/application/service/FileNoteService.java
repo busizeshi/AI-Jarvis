@@ -10,4 +10,6 @@ public interface FileNoteService {
     String getNoteTitle(Long userId, Long noteId);
 
     void updateParseStatus(Long userId, Long noteId, String parseStatus);
+
+    boolean applyParsedContent(Long userId, Long noteId, Integer expectedVersion, String content);
 }

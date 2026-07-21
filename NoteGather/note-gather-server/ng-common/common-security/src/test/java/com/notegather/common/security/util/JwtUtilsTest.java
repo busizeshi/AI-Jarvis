@@ -45,6 +45,16 @@ class JwtUtilsTest {
         assertThat(payload.getJti()).isNotBlank();
     }
 
+    @Test
+    void shouldRejectJwtSecretShorterThanHs256Requirement() {
+        JwtProperties properties = new JwtProperties();
+        properties.setSecret("short-secret");
+
+        assertThatThrownBy(() -> new JwtUtils(properties).validateConfiguration())
+                .isInstanceOfSatisfying(BusinessException.class, ex ->
+                        assertThat(ex.getCode()).isEqualTo(ResultCode.SERVICE_UNAVAILABLE.getCode()));
+    }
+
     private JwtProperties jwtProperties() {
         JwtProperties properties = new JwtProperties();
         properties.setSecret("0123456789abcdef0123456789abcdef0123456789abcdef");

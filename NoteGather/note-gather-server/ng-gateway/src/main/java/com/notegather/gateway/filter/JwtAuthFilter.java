@@ -6,6 +6,7 @@ import com.notegather.common.core.constant.CommonConstants;
 import com.notegather.common.core.exception.BusinessException;
 import com.notegather.common.core.result.Result;
 import com.notegather.common.core.result.ResultCode;
+import com.notegather.common.redis.session.AuthSessionStore;
 import com.notegather.common.security.config.JwtProperties;
 import com.notegather.common.security.model.TokenPayload;
 import com.notegather.common.security.util.JwtUtils;
@@ -16,7 +17,6 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -25,6 +25,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.nio.charset.StandardCharsets;
 
@@ -36,7 +37,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
     private final JwtUtils jwtUtils;
     private final JwtProperties jwtProperties;
     private final SecurityWhiteListProperties whiteListProperties;
-    private final ReactiveStringRedisTemplate reactiveRedisTemplate;
+    private final AuthSessionStore authSessionStore;
     private final ObjectMapper objectMapper;
     private final AntPathMatcher antPathMatcher = new AntPathMatcher();
 
@@ -54,6 +55,9 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
 
         String authHeader = exchange.getRequest().getHeaders().getFirst(jwtProperties.getHeaderName());
         String token = jwtUtils.extractToken(authHeader);
+        if (token == null && path.startsWith("/ws/collab/")) {
+            token = exchange.getRequest().getQueryParams().getFirst("access_token");
+        }
         if (token == null) {
             return writeUnauthorized(exchange, ResultCode.UNAUTHORIZED);
         }
@@ -65,15 +69,20 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             return writeUnauthorized(exchange, resolveTokenError(e));
         }
 
-        String blacklistKey = CommonConstants.REDIS_TOKEN_BLACKLIST_PREFIX + payload.getJti();
-        return reactiveRedisTemplate.hasKey(blacklistKey)
-                .flatMap(inBlacklist -> Boolean.TRUE.equals(inBlacklist)
+        return Mono.fromCallable(() -> isActiveSession(payload))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(active -> !active
                         ? writeUnauthorized(exchange, ResultCode.TOKEN_INVALID)
                         : chain.filter(withTrustedUserHeaders(exchange, payload)))
                 .onErrorResume(ex -> {
-                    log.error("[JwtAuthFilter] Redis blacklist check failed path={}", path, ex);
+                    log.error("[JwtAuthFilter] Redisson session check failed path={}", path, ex);
                     return writeUnavailable(exchange);
                 });
+    }
+
+    private boolean isActiveSession(TokenPayload payload) {
+        return !authSessionStore.isBlacklisted(payload.getJti())
+                && authSessionStore.isAccessSessionActive(payload.getUserId(), payload.getJti());
     }
 
     private ServerWebExchange removeInternalHeaders(ServerWebExchange exchange) {

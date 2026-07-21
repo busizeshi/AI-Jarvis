@@ -1,39 +1,30 @@
 spring:
   cloud:
     nacos:
-      discovery:
-        server-addr: 10.142.244.123:8848
-        namespace: public
-        group: DEFAULT_GROUP
+      discovery: { server-addr: 192.168.1.12:8848, namespace: public, group: HTTP_GROUP }
   data:
     redis:
+      # Redis 用传统密码模式（password=root），未启用 ACL。
+      # 不能配置 username，否则 Spring Data Redis / Redisson 会走 ACL 认证（AUTH root root）返回 WRONGPASS
       host: 115.190.125.94
       port: 6379
       password: root
+      # Gateway and ng-admin must share this DB: it stores distributed login sessions,
+      # refresh-token rotation state, and revoked-token markers.
       database: 0
       timeout: 3000ms
-      lettuce:
-        pool:
-          min-idle: 2
-          max-idle: 10
-          max-active: 20
+      lettuce: { pool: { min-idle: 2, max-idle: 10, max-active: 20 } }
 
 ng:
   security:
     jwt:
-      secret: JWDdmm@2552
-      access-token-expire-ms: 7200000
-      refresh-token-expire-ms: 2592000000
+      secret: NoteGatherJwtSigningKey_2026_07_17_ReplaceBeforeProduction
+      access-token-expire-ms: 7200000        # 2h
+      refresh-token-expire-ms: 2592000000    # 30d
 
 management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-  endpoint:
-    health:
-      show-details: when-authorized
+  endpoints: { web: { exposure: { include: health,info } } }
+  endpoint: { health: { show-details: when-authorized } }
 
 logging:
-  level:
-    com.notegather: INFO
+  level: { com.notegather: INFO }

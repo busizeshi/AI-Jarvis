@@ -1,10 +1,26 @@
+# ============================================================
+# ng-biz · 知识库 / 笔记 / AI / 图谱 / 闪卡 / 协作 / 通知 / 工作流
+# 端口 9001，避免与网关 9003 冲突；Redis database=2 与 ng-admin 的 1 隔离
+# ============================================================
 server:
   port: 9001
   shutdown: graceful
-  servlet:
-    context-path: /
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+  openapi:
+    title: NoteGather 业务服务接口文档
+    description: 知识库、笔记、AI、图谱、闪卡、协作、通知、工作流接口
+    version: v1
 
 spring:
+  # ---------- 数据源（Druid） ----------
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
@@ -12,34 +28,27 @@ spring:
       username: root
       password: JWDdmm@2552
       driver-class-name: com.mysql.cj.jdbc.Driver
-      initial-size: 5
-      min-idle: 5
+      initial-size: 3
+      min-idle: 3
       max-active: 20
-      max-wait: 60000
-      time-between-eviction-runs-millis: 60000
-      min-evictable-idle-time-millis: 300000
-      validation-query: SELECT 1
-      test-while-idle: true
-      test-on-borrow: false
-      test-on-return: false
-      filters: stat,wall
-      stat-view-servlet:
-        enabled: true
-        url-pattern: /druid/*
-        login-username: druid
-        login-password: root
-        reset-enable: false
+
+  # ---------- Redis 库号（覆盖 common.yaml 的默认 0） ----------
+  data:
+    redis:
+      database: 2
+
+  # ---------- 文件上传 ----------
+  # Spring Boot 默认 max-file-size=1MB / max-request-size=10MB，远小于 ng.file.max-size-bytes
   servlet:
     multipart:
-      enabled: true
       max-file-size: 50MB
-      max-request-size: 100MB
+      max-request-size: 50MB
 
+# ---------- MyBatis-Plus ----------
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
   global-config:
     db-config:
       logic-delete-field: deleted
@@ -47,55 +56,184 @@ mybatis-plus:
       logic-not-delete-value: 0
       id-type: assign_id
 
-rocketmq:
-  name-server: 10.142.244.123:9876
-  producer:
-    group: ng-biz-producer
-    send-message-timeout: 3000
-    retry-times-when-send-failed: 2
-  consumer:
-    group: ng-biz-file-group
-
+# ---------- Dubbo ----------
 dubbo:
   application:
     name: ng-biz
   registry:
-    address: nacos://10.142.244.123:8848
+    address: nacos://192.168.1.12:8848
     protocol: nacos
+    group: DUBBO_GROUP
     username: nacos
     password: nacos
     check: false
   protocol:
     name: dubbo
     port: -1
-  provider:
-    register: true
   consumer:
     check: false
   scan:
     base-packages: com.notegather
 
+# ---------- RocketMQ ----------
+# consumer group 通过 @RocketMQMessageListener 注解硬编码：
+#   GROUP_BIZ_FILE / GROUP_BIZ_GRAPH / GROUP_BIZ_FLASHCARD / GROUP_BIZ_FLASHCARD_CLEANUP / GROUP_BIZ_NOTE_INDEX
+rocketmq:
+  name-server: 192.168.1.12:9876
+  producer:
+    group: ng-biz-producer-group
+    send-message-timeout: 3000
+    retry-times-when-send-failed: 2
+
 ng:
-  file:
-    max-size-bytes: 52428800
+  # ---------- MinIO 对象存储 ----------
+  # MinioProperties 仅包含 endpoint/access-key/secret-key/bucket 四个字段（无 file-path-prefix/max-size-bytes）
+  # NoteContentIndexPublisher 通过 @Value("${ng.minio.bucket}") 二次引用，bucket 必须存在
   minio:
-    endpoint: http://10.142.244.123:9000
+    endpoint: http://192.168.1.12:9000
     access-key: root
     secret-key: qdrantroot
     bucket: notegather
-  grpc:
-    ai:
-      parse-host: localhost
-      parse-port: 50051
-      search-host: localhost
-      search-port: 50052
 
+  # ---------- Unified FastAPI AI service ----------
+  ai:
+    host: 0.0.0.0
+    port: 8000
+    base-url: http://ng-ai:8000
+    request-timeout-ms: 30000
+    worker-enabled: true
+    log-level: INFO
+    qdrant:
+      host: 192.168.1.12
+      port: 6333
+      grpc-port: 6334
+      prefer-grpc: true
+      https: false
+      api-key: qdrantroot
+    embedding:
+      model: BAAI/bge-m3
+      device: cpu
+      use-fp16: false
+    chunking:
+      size: 512
+      overlap: 64
+    llm:
+      model: dashscope/qwen-plus
+      api-base: ""
+      api-key: ""
+      temperature: 0.3
+    retrieval:
+      top-k: 10
+      vector-enabled: true
+      graph-enabled: true
+      rerank-top-k: 5
+      rrf-k: 60
+      graph-top-k: 10
+      reranker-enabled: true
+      reranker-model: BAAI/bge-reranker-v2-m3
+      reranker-candidate-limit: 30
+      reranker-timeout-ms: 1500
+      branch-timeout-ms: 2000
+    rocketmq:
+      name-server: 192.168.1.12:9876
+      file-topic: NG_FILE_TOPIC
+      consumer-group: ng_parse_consumer_group
+      note-index-consumer-group: ng-ai-note-index-group
+      producer-group: ng_parse_producer_group
+      parse-max-attempts: 3
+      graph-topic: NG_GRAPH_TOPIC
+      graph-consumer-group: ng_graph_consumer_group
+      graph-producer-group: ng_graph_producer_group
+      graph-max-attempts: 3
+      flashcard-topic: NG_FLASHCARD_TOPIC
+      flashcard-consumer-group: ng-ai-flashcard-group
+      flashcard-producer-group: ng-ai-flashcard-producer-group
+      flashcard-max-attempts: 3
+      flashcard-max-candidates: 10
+      workflow-topic: NG_WORKFLOW_TOPIC
+      workflow-consumer-group: ng-ai-workflow-group
+    workflow:
+      enabled: false
+      runtime-base-url: http://localhost:9003
+      service-token: ""
+      runtime-timeout-ms: 10000
+      max-run-minutes: 20
+      max-token-budget: 20000
+      max-output-chars: 20000
+      retry-max-attempts: 3
+
+  # ---------- Neo4j 知识图谱（@NotBlank 强校验，缺失会启动失败） ----------
+  graph:
+    enabled: true
+    max-nodes: 100
+    max-edges: 200
+    connection-timeout-ms: 3000
+    max-transaction-retry-time-ms: 1000
+    neo4j:
+      uri: bolt://192.168.1.12:7687
+      username: neo4j
+      password: root
+      database: neo4j
+
+  # ---------- AI 聊天开关 ----------
+  chat:
+    enabled: true
+
+  # ---------- 闪卡模块 ----------
+  flashcard:
+    enabled: true
+    ai-generation-enabled: true
+    initial-interval-days: 1
+    second-interval-days: 6
+    minimum-ease-factor: 1.3
+    default-ease-factor: 2.5
+    max-ai-candidates: 10
+
+  # ---------- 文件上传大小限制（业务层校验：FileUploadServiceImpl） ----------
+  file:
+    max-size-bytes: 52428800          # 50 MB
+
+# ---------- 协作模块（第三阶段，默认关闭） ----------
+collaboration:
+  enabled: false
+  invite:
+    expire-hours: 72
+  comments:
+    max-content-length: 2000
+
+# ---------- 通知模块（第三阶段，默认关闭） ----------
+notification:
+  enabled: false
+  list-limit: 50
+  websocket:
+    enabled: true
+    allowed-origin-patterns:
+      - "http://localhost:5173"
+      - "http://localhost:8080"
+
+# ---------- 工作流模块（第三阶段，默认 false） ----------
+workflow:
+  enabled: false
+  max-nodes: 40
+  max-output-chars: 20000
+  approval-expire-hours: 72
+
+# ---------- 实时协作 Relay（第三阶段，默认 false） ----------
+collab-realtime:
+  enabled: false
+  service-token: ""
+
+# ---------- Actuator 与监控 ----------
 management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized
 
+# ---------- 日志 ----------
 logging:
   level:
     com.notegather: DEBUG
-    com.alibaba.druid: WARN

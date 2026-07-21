@@ -24,6 +24,7 @@ public class FileNoteServiceImpl implements FileNoteService {
 
     private final LibraryRepository libraryRepository;
     private final NoteRepository noteRepository;
+    private final NoteLinkService noteLinkService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -58,6 +59,20 @@ public class FileNoteServiceImpl implements FileNoteService {
             return;
         }
         noteRepository.updateParseStatus(noteId, userId, parseStatus);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean applyParsedContent(Long userId, Long noteId, Integer expectedVersion, String content) {
+        Note note = requireNote(userId, noteId);
+        if (!note.getVersion().equals(expectedVersion) || StrUtil.isNotBlank(note.getContent())) {
+            return false;
+        }
+        note.setContent(content == null ? "" : content);
+        note.setParseStatus("DONE");
+        noteRepository.update(note, userId);
+        noteLinkService.refreshLibraryLinks(userId, note.getLibraryId());
+        return true;
     }
 
     private void requireLibrary(Long userId, Long libraryId) {

@@ -8,5 +8,7 @@ public interface FileStorage {
 
     void store(String bucket, String objectKey, MultipartFile file);
 
+    String readText(String bucket, String objectKey);
+
     void deleteQuietly(String bucket, String objectKey);
 }

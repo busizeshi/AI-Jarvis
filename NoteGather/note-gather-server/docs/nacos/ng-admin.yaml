@@ -2,6 +2,19 @@ server:
   port: 9002
   shutdown: graceful
 
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+  openapi:
+    title: NoteGather 用户服务接口文档
+    description: 用户认证与个人资料相关接口
+    version: v1
+
 spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
@@ -13,10 +26,6 @@ spring:
       initial-size: 3
       min-idle: 3
       max-active: 10
-  data:
-    redis:
-      database: 1
-
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
   configuration:
@@ -32,8 +41,9 @@ dubbo:
   application:
     name: ng-admin
   registry:
-    address: nacos://10.142.244.123:8848
+    address: nacos://192.168.1.12:8848
     protocol: nacos
+    group: DUBBO_GROUP
     username: nacos
     password: nacos
     check: false
@@ -44,6 +54,40 @@ dubbo:
     check: false
   scan:
     base-packages: com.notegather
+
+ng:
+  security:
+    password-envelope:
+      # Production: set one shared PKCS#8 private key for every ng-admin node.
+      # Local development: leave empty; the first node creates a shared key in Redisson.
+      key-id: v1
+      private-key-pem:
+    user-context:
+      enabled: true
+      # 放行 Knife4j / Springdoc 的静态资源与接口文档路径，否则 UserContextFilter 会拦截返回 401
+      # 注意：AntPathMatcher 中 /v3/api-docs/** 不匹配 /v3/api-docs 本身，需要两条都加
+      white-list:
+        - /api/v1/user/password-key
+        - /api/v1/user/register
+        - /api/v1/user/login
+        - /api/v1/user/refresh-token
+        - /actuator/**
+        - /v3/api-docs
+        - /v3/api-docs/**
+        - /swagger-resources
+        - /swagger-resources/**
+        - /doc.html
+        - /webjars/**
+        - /favicon.ico
+  minio:
+    # 服务器 MinIO 容器 vector-storage-minio-1，凭据来自 docker inspect
+    endpoint: http://192.168.1.12:9000
+    access-key: root
+    secret-key: qdrantroot
+    bucket: notegather
+    avatar-path-prefix: avatars
+    avatar-max-size-bytes: 4194304   # 4 MB
+    avatar-allowed-types: image/jpeg,image/png,image/webp,image/gif
 
 logging:
   level:

@@ -19,6 +19,11 @@
         <module>module-knowledge</module>
         <module>module-file</module>
         <module>module-ai</module>
+        <module>module-graph</module>
+        <module>module-flashcard</module>
+        <module>module-collaboration</module>
+        <module>module-notification</module>
+        <module>module-workflow</module>
         <module>ng-biz-app</module>
     </modules>
 </project>

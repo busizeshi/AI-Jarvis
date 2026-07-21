@@ -1,20 +1,22 @@
 package com.notegather.admin.application.user.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
 public class RegisterRequest {
 
-    @NotBlank(message = "用户名不能为空")
-    @Size(min = 3, max = 64, message = "用户名长度必须在 3 到 64 个字符之间")
+    @NotBlank(message = "Username must not be blank")
+    @Size(min = 3, max = 64, message = "Username length must be between 3 and 64")
     private String username;
 
-    @NotBlank(message = "密码不能为空")
-    @Size(min = 8, max = 128, message = "密码长度必须在 8 到 128 个字符之间")
-    private String password;
+    @Valid
+    @NotNull(message = "Password envelope must not be null")
+    private PasswordEnvelopeRequest passwordEnvelope;
 
-    @Size(max = 64, message = "昵称不能超过 64 个字符")
+    @Size(max = 64, message = "Nickname must not exceed 64 characters")
     private String nickname;
 }

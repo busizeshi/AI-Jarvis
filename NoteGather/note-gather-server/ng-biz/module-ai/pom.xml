@@ -27,10 +27,6 @@
             <groupId>com.notegather</groupId>
             <artifactId>common-mybatis</artifactId>
         </dependency>
-        <dependency>
-            <groupId>com.notegather</groupId>
-            <artifactId>common-grpc</artifactId>
-        </dependency>
         <!-- WebFlux（SSE 流式输出） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -137,11 +137,19 @@ public class JwtUtils {
         return date == null ? null : date.toInstant();
     }
 
+    public void validateConfiguration() {
+        getSignKey();
+    }
+
     private SecretKey getSignKey() {
         if (StrUtil.isBlank(jwtProperties.getSecret())) {
             throw new BusinessException(ResultCode.SERVICE_UNAVAILABLE, "JWT 密钥未配置");
         }
         byte[] keyBytes = jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length < 32) {
+            throw new BusinessException(ResultCode.SERVICE_UNAVAILABLE,
+                    "JWT 密钥长度不足，HS256 至少需要 32 字节");
+        }
         return Keys.hmacShaKeyFor(keyBytes);
     }
 }

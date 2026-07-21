@@ -186,9 +186,9 @@ CREATE TABLE IF NOT EXISTS t_parse_task (
     create_time   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间（毫秒精度）',
     update_time   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间（毫秒精度），自动维护',
     deleted       TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除标记：0=未删除，1=已删除',
-    status_active TINYINT      GENERATED ALWAYS AS (
-        IF(deleted = 0 AND status IN ('PENDING', 'PROCESSING'), 1, NULL)
-    ) VIRTUAL COMMENT '活跃任务标记：未删除且进行中时固定为1，否则为NULL，用于防并发唯一约束',
+    status_active VARCHAR(16)  GENERATED ALWAYS AS (
+        IF(deleted = 0 AND status IN ('PENDING', 'PROCESSING'), status, NULL)
+    ) VIRTUAL COMMENT '活跃任务状态：未删除且进行中时保留状态，否则为NULL，用于防并发唯一约束',
     PRIMARY KEY (id),
     UNIQUE KEY uk_parse_task_active_file (file_id, status_active),
     KEY idx_parse_task_file_time (file_id, create_time DESC),

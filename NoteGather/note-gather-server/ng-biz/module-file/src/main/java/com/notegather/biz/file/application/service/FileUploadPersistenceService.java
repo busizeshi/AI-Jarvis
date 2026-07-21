@@ -7,6 +7,7 @@ import com.notegather.biz.file.domain.model.ParseTask;
 import com.notegather.biz.file.domain.enums.ParseStatus;
 import com.notegather.biz.file.domain.repository.FileRepository;
 import com.notegather.biz.file.domain.repository.ParseTaskRepository;
+import com.notegather.biz.file.application.port.FileStorage;
 import com.notegather.common.api.knowledge.KnowledgeFacade;
 import com.notegather.common.api.knowledge.dto.FileNoteCreateRequest;
 import com.notegather.common.api.knowledge.dto.FileNoteDTO;
@@ -27,6 +28,7 @@ public class FileUploadPersistenceService {
     private final FileRepository fileRepository;
     private final ParseTaskRepository parseTaskRepository;
     private final KnowledgeFacade knowledgeFacade;
+    private final FileStorage fileStorage;
 
     @Transactional(rollbackFor = Exception.class)
     public FileUploadResponse createUpload(
@@ -137,7 +139,7 @@ public class FileUploadPersistenceService {
         }
         parseTaskRepository.update(task);
         if (isLatestTask(fileId, taskId)) {
-            updateLatestFileStatus(file, task, resultStatus, message.getFinalFailed());
+            updateLatestFileStatus(file, task, resultStatus, message);
         }
     }
 
@@ -181,24 +183,34 @@ public class FileUploadPersistenceService {
             FileRecord file,
             ParseTask task,
             ParseStatus resultStatus,
-            Boolean finalFailed
+            ParseDoneMessage message
     ) {
         if (resultStatus == ParseStatus.DONE) {
-            updateFileAndNote(file, ParseStatus.DONE, task.getChunkCount(), null);
+            String content = fileStorage.readText(file.getBucket(), requiredObjectKey(message.getExtractedTextObjectKey()));
+            knowledgeFacade.applyParsedContent(file.getUserId(), file.getNoteId(), message.getNoteVersion(), content);
+            fileRepository.updateParseResult(file.getId(), file.getUserId(), ParseStatus.DONE.name(),
+                    task.getChunkCount(), null);
             return;
         }
-        if (Boolean.TRUE.equals(finalFailed)) {
-            updateFileAndNote(file, ParseStatus.FAILED, 0, task.getErrorMsg());
+        if (Boolean.TRUE.equals(message.getFinalFailed())) {
+            updateFileAndNote(file, ParseStatus.FAILED, 0, task.getErrorMsg(), message.getNoteVersion());
             return;
         }
-        updateFileAndNote(file, ParseStatus.PROCESSING, 0, task.getErrorMsg());
+        updateFileAndNote(file, ParseStatus.PROCESSING, 0, task.getErrorMsg(), message.getNoteVersion());
     }
 
     private void updateFileAndNote(FileRecord file, ParseStatus status, Integer chunkCount, String errorMessage) {
+        updateFileAndNote(file, status, chunkCount, errorMessage, null);
+    }
+
+    private void updateFileAndNote(FileRecord file, ParseStatus status, Integer chunkCount, String errorMessage,
+                                   Integer expectedNoteVersion) {
         fileRepository.updateParseResult(
                 file.getId(), file.getUserId(), status.name(), chunkCount, errorMessage
         );
-        knowledgeFacade.updateParseStatus(file.getUserId(), file.getNoteId(), status.name());
+        if (expectedNoteVersion == null || isCurrentNoteVersion(file, expectedNoteVersion)) {
+            knowledgeFacade.updateParseStatus(file.getUserId(), file.getNoteId(), status.name());
+        }
     }
 
     private ParseTask latestTask(Long fileId) {
@@ -236,5 +248,16 @@ public class FileUploadPersistenceService {
         } catch (NumberFormatException exception) {
             return null;
         }
+    }
+
+    private String requiredObjectKey(String value) {
+        if (value == null || value.isBlank()) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "解析结果缺少正文对象键");
+        }
+        return value;
+    }
+
+    private boolean isCurrentNoteVersion(FileRecord file, Integer expectedVersion) {
+        return expectedVersion.equals(knowledgeFacade.getActiveNote(file.getUserId(), file.getNoteId()).getVersion());
     }
 }

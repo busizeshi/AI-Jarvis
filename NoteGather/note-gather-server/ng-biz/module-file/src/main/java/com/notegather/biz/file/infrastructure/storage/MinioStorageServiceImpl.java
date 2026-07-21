@@ -8,6 +8,7 @@ import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.GetObjectArgs;
 import io.minio.RemoveObjectArgs;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 @Service
 @Slf4j
@@ -50,6 +52,16 @@ public class MinioStorageServiceImpl implements FileStorage {
             minioClient.removeObject(RemoveObjectArgs.builder().bucket(bucket).object(objectKey).build());
         } catch (Exception exception) {
             log.warn("MinIO 孤儿对象清理失败 bucket={} objectKey={}", bucket, objectKey, exception);
+        }
+    }
+
+    @Override
+    public String readText(String bucket, String objectKey) {
+        try (InputStream inputStream = minioClient.getObject(GetObjectArgs.builder()
+                .bucket(bucket).object(objectKey).build())) {
+            return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception exception) {
+            throw new BusinessException(ResultCode.SERVICE_UNAVAILABLE, "解析正文读取失败");
         }
     }
 

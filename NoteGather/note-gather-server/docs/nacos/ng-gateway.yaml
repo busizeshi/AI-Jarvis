@@ -4,12 +4,23 @@ server:
 
 spring:
   cloud:
+    loadbalancer:
+      eager-load:
+        clients:
+          - ng-admin
+          - ng-biz
     gateway:
       discovery:
         locator:
           enabled: true
           lower-case-service-id: true
       routes:
+        - id: ng-admin-openapi
+          uri: lb://ng-admin
+          predicates:
+            - Path=/api/v1/user/v3/api-docs
+          filters:
+            - RewritePath=/api/v1/user/v3/api-docs, /v3/api-docs
         - id: ng-admin-user
           uri: lb://ng-admin
           predicates:
@@ -36,14 +47,46 @@ spring:
             allowed-headers: "*"
             allow-credentials: true
             max-age: 3600
+            allow-origins:
+              - "http://192.168.1.12:8080"
 
 ng:
   security:
     white-list:
+      - /api/v1/user/password-key
       - /api/v1/user/register
       - /api/v1/user/login
       - /api/v1/user/refresh-token
       - /actuator/**
+      - /v3/api-docs
+      - /api/v1/user/v3/api-docs
+      # Knife4j / Springdoc 聚合文档相关路径放行（网关层不校验 Token）
+      - /v3/api-docs
+      - /v3/api-docs/**
+      - /swagger-resources
+      - /swagger-resources/**
+      - /doc.html
+      - /webjars/**
+      - /favicon.ico
+
+# Knife4j 网关聚合：自动从 Nacos 注册中心发现 ng-admin / ng-biz，
+# 聚合它们的 OpenAPI 文档，通过 http://localhost:9003/doc.html 访问
+knife4j:
+  gateway:
+    enabled: true
+    strategy: discover
+    discover:
+      enabled: true
+      version: openapi3
+      service-config:
+        ng-admin:
+          name: 用户与鉴权服务
+          url: /v3/api-docs
+          service-url: http://localhost:9002
+        ng-biz:
+          name: 业务服务
+          url: /v3/api-docs
+          service-url: http://localhost:9001
 
 management:
   endpoints:

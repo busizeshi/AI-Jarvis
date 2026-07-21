@@ -12,12 +12,14 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 
 @AutoConfiguration
-@EnableConfigurationProperties({JwtProperties.class, UserContextProperties.class})
+@EnableConfigurationProperties({JwtProperties.class, UserContextProperties.class, CollabRealtimeProperties.class})
 public class SecurityAutoConfiguration {
 
     @Bean
     public JwtUtils jwtUtils(JwtProperties jwtProperties) {
-        return new JwtUtils(jwtProperties);
+        JwtUtils jwtUtils = new JwtUtils(jwtProperties);
+        jwtUtils.validateConfiguration();
+        return jwtUtils;
     }
 
     @Configuration(proxyBeanMethods = false)

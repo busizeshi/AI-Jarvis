@@ -16,6 +16,7 @@ public final class CommonConstants {
     public static final long ACCESS_TOKEN_EXPIRE_MS = 2 * 60 * 60 * 1000L;
     public static final long REFRESH_TOKEN_EXPIRE_MS = 30L * 24 * 60 * 60 * 1000L;
     public static final String REDIS_TOKEN_BLACKLIST_PREFIX = "ng:token:blacklist:";
+    public static final String REDIS_ACCESS_TOKEN_PREFIX = "ng:token:access:";
     public static final String REDIS_REFRESH_TOKEN_PREFIX = "ng:token:refresh:";
     public static final String REDIS_REFRESH_LOCK_PREFIX = "token:refresh:";
 

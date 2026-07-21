@@ -16,5 +16,6 @@ public class User extends BaseEntity {
     private String nickname;
     @TableField("avatar_url")
     private String avatarUrl;
+    private String bio;
     private Integer status;
 }

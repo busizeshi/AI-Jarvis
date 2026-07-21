@@ -6,7 +6,7 @@ spring:
   cloud:
     nacos:
       config:
-        server-addr: ${NACOS_ADDR:10.142.244.123:8848}
+        server-addr: ${NACOS_ADDR:192.168.1.12:8848}
         namespace: ${NACOS_NAMESPACE:public}
         group: DEFAULT_GROUP
         file-extension: yaml

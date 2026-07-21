@@ -22,6 +22,11 @@ public class ChatCitation {
     private String noteTitle;
     private String chunkText;
     private Float score;
+    private String chunkId;
+    private Integer chunkIndex;
+    private Integer startOffset;
+    private Integer endOffset;
+    private String retrievalSources;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

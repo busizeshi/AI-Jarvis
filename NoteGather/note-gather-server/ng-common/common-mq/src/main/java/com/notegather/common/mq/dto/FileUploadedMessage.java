@@ -25,11 +25,17 @@ public class FileUploadedMessage implements Serializable {
     /** 关联笔记ID（可为空，后续关联） */
     private String noteId;
 
+    /** 知识库ID，用于后续图谱任务资源隔离。 */
+    private String libraryId;
+
     /** 解析任务ID，用于让解析结果精确回写到本次任务 */
     private String parseTaskId;
 
     /** 笔记标题快照，用于构建可展示的检索引用 */
     private String noteTitle;
+
+    /** 上传创建笔记时的版本，用于拒绝解析期间发生编辑后的旧结果。 */
+    private Integer noteVersion;
 
     /** MinIO 对象键 */
     private String objectKey;

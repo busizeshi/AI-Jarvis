@@ -108,13 +108,15 @@ public class FileUploadServiceImpl implements FileUploadService {
 
     private boolean publishOrMarkFailed(FileRecord file, Long parseTaskId) {
         try {
-            String noteTitle = knowledgeFacade.getNoteTitle(file.getUserId(), file.getNoteId());
+            var note = knowledgeFacade.getActiveNote(file.getUserId(), file.getNoteId());
             fileUploadedEventPublisher.publish(FileUploadedMessage.builder()
                     .fileId(String.valueOf(file.getId()))
                     .userId(String.valueOf(file.getUserId()))
                     .noteId(String.valueOf(file.getNoteId()))
+                    .libraryId(String.valueOf(file.getLibraryId()))
                     .parseTaskId(String.valueOf(parseTaskId))
-                    .noteTitle(noteTitle)
+                    .noteTitle(note.getTitle())
+                    .noteVersion(note.getVersion())
                     .objectKey(file.getObjectKey())
                     .bucket(file.getBucket())
                     .fileName(file.getFileName())

@@ -22,6 +22,5 @@
         <module>common-mybatis</module>
         <module>common-redis</module>
         <module>common-mq</module>
-        <module>common-grpc</module>
     </modules>
 </project>

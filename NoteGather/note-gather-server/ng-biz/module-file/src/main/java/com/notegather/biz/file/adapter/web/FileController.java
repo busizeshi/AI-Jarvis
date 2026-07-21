@@ -22,20 +22,20 @@ public class FileController {
 
     @PostMapping("/upload")
     public Result<FileUploadResponse> upload(
-            @RequestParam Long libraryId,
-            @RequestParam(required = false) Long parentId,
+            @RequestParam("libraryId") Long libraryId,
+            @RequestParam(value = "parentId", required = false) Long parentId,
             @RequestParam("file") MultipartFile file
     ) {
         return Result.ok(fileUploadService.upload(libraryId, parentId, file));
     }
 
     @GetMapping("/{fileId}/parse-status")
-    public Result<FileParseStatusResponse> getParseStatus(@PathVariable Long fileId) {
+    public Result<FileParseStatusResponse> getParseStatus(@PathVariable("fileId") Long fileId) {
         return Result.ok(fileUploadService.getParseStatus(fileId));
     }
 
     @PostMapping("/{fileId}/parse/retry")
-    public Result<FileParseStatusResponse> retryParse(@PathVariable Long fileId) {
+    public Result<FileParseStatusResponse> retryParse(@PathVariable("fileId") Long fileId) {
         return Result.ok(fileUploadService.retryParse(fileId));
     }
 }

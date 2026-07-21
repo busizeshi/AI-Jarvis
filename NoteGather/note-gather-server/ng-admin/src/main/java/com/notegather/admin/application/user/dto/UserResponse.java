@@ -11,5 +11,8 @@ public class UserResponse {
     String username;
     String nickname;
     String avatarUrl;
+    String bio;
     Integer status;
+    /** 注册时间，ISO-8601 格式，前端用于展示"加入时间" */
+    String createTime;
 }

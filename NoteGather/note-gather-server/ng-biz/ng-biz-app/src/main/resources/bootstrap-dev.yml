@@ -5,9 +5,12 @@ spring:
       password: ${NACOS_PASSWORD:nacos}
       config:
         enabled: ${NACOS_CONFIG_ENABLED:true}
-        server-addr: ${NACOS_ADDR:10.142.244.123:8848}
+        server-addr: ${NACOS_ADDR:192.168.1.12:8848}
         namespace: ${NACOS_NAMESPACE:public}
+        group: DEFAULT_GROUP
+        file-extension: yaml
       discovery:
-        server-addr: ${NACOS_ADDR:10.142.244.123:8848}
+        server-addr: ${NACOS_ADDR:192.168.1.12:8848}
         namespace: ${NACOS_NAMESPACE:public}
-        register-enabled: ${NACOS_REGISTER_ENABLED:false}
+        group: ${NACOS_DISCOVERY_GROUP:HTTP_GROUP}
+        register-enabled: ${NACOS_REGISTER_ENABLED:true}

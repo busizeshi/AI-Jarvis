@@ -25,6 +25,11 @@ public class MybatisNoteRepository implements NoteRepository {
     }
 
     @Override
+    public Note findById(Long noteId) {
+        return noteMapper.selectById(noteId);
+    }
+
+    @Override
     public void updateParseStatus(Long noteId, Long userId, String parseStatus) {
         Note update = new Note();
         update.setParseStatus(parseStatus);
@@ -36,6 +41,11 @@ public class MybatisNoteRepository implements NoteRepository {
     @Override
     public Note findDeletedByIdAndUserId(Long noteId, Long userId) {
         return noteMapper.selectByIdAndUserId(noteId, userId, 1);
+    }
+
+    @Override
+    public java.util.List<Note> findActiveByTitle(Long userId, Long libraryId, String title) {
+        return noteMapper.selectActiveByTitle(userId, libraryId, title);
     }
 
     @Override

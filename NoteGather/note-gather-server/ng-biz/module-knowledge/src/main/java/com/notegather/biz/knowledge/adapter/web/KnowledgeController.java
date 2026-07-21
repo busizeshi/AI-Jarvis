@@ -1,7 +1,9 @@
 package com.notegather.biz.knowledge.adapter.web;
 
+import com.notegather.biz.knowledge.application.dto.NoteBacklink;
 import com.notegather.biz.knowledge.application.dto.NoteTreeNode;
 import com.notegather.biz.knowledge.application.service.KnowledgeService;
+import com.notegather.biz.knowledge.application.service.NoteLinkService;
 import com.notegather.biz.knowledge.domain.enums.LibraryType;
 import com.notegather.biz.knowledge.domain.enums.NodeType;
 import com.notegather.biz.knowledge.domain.enums.NoteType;
@@ -34,6 +36,7 @@ import java.util.List;
 public class KnowledgeController {
 
     private final KnowledgeService knowledgeService;
+    private final NoteLinkService noteLinkService;
 
     @GetMapping("/libraries")
     public Result<List<Library>> libraries() {
@@ -47,24 +50,25 @@ public class KnowledgeController {
     }
 
     @GetMapping("/libraries/{libraryId}")
-    public Result<Library> library(@PathVariable Long libraryId) {
+    public Result<Library> library(@PathVariable("libraryId") Long libraryId) {
         return Result.ok(knowledgeService.getLibrary(UserContext.getUserId(), libraryId));
     }
 
     @PutMapping("/libraries/{libraryId}")
-    public Result<Library> updateLibrary(@PathVariable Long libraryId, @Valid @RequestBody LibraryUpdateRequest request) {
+    public Result<Library> updateLibrary(@PathVariable("libraryId") Long libraryId, @Valid @RequestBody LibraryUpdateRequest request) {
         return Result.ok(knowledgeService.updateLibrary(UserContext.getUserId(), libraryId, request.name(), request.type(),
                 request.description(), request.sortOrder()));
     }
 
     @DeleteMapping("/libraries/{libraryId}")
-    public Result<Void> deleteLibrary(@PathVariable Long libraryId) {
-        knowledgeService.deleteLibrary(UserContext.getUserId(), libraryId);
+    public Result<Void> deleteLibrary(@PathVariable("libraryId") Long libraryId,
+                                      @Valid @RequestBody LibraryDeleteRequest request) {
+        knowledgeService.deleteLibrary(UserContext.getUserId(), libraryId, request.confirmationName());
         return Result.ok();
     }
 
     @PostMapping("/libraries/{libraryId}/restore")
-    public Result<Void> restoreLibrary(@PathVariable Long libraryId) {
+    public Result<Void> restoreLibrary(@PathVariable("libraryId") Long libraryId) {
         knowledgeService.restoreLibrary(UserContext.getUserId(), libraryId);
         return Result.ok();
     }
@@ -75,7 +79,7 @@ public class KnowledgeController {
     }
 
     @GetMapping("/libraries/{libraryId}/tree")
-    public Result<List<NoteTreeNode>> tree(@PathVariable Long libraryId) {
+    public Result<List<NoteTreeNode>> tree(@PathVariable("libraryId") Long libraryId) {
         return Result.ok(knowledgeService.tree(UserContext.getUserId(), libraryId));
     }
 
@@ -86,18 +90,29 @@ public class KnowledgeController {
     }
 
     @GetMapping("/notes/{noteId}")
-    public Result<Note> note(@PathVariable Long noteId) {
+    public Result<Note> note(@PathVariable("noteId") Long noteId) {
         return Result.ok(knowledgeService.getNote(UserContext.getUserId(), noteId));
     }
 
+    @PostMapping("/notes/{noteId}/index-retry")
+    public Result<Note> retryIndex(@PathVariable("noteId") Long noteId) {
+        return Result.ok(knowledgeService.retryIndex(UserContext.getUserId(), noteId));
+    }
+
+    @GetMapping("/notes/{noteId}/backlinks")
+    public Result<List<NoteBacklink>> backlinks(@PathVariable("noteId") Long noteId) {
+        knowledgeService.getNote(UserContext.getUserId(), noteId);
+        return Result.ok(noteLinkService.backlinks(UserContext.getUserId(), noteId));
+    }
+
     @PutMapping("/notes/{noteId}")
-    public Result<Note> updateNote(@PathVariable Long noteId, @RequestBody NoteUpdateRequest request) {
+    public Result<Note> updateNote(@PathVariable("noteId") Long noteId, @RequestBody NoteUpdateRequest request) {
         return Result.ok(knowledgeService.updateNote(UserContext.getUserId(), noteId, request.title(), request.content(),
                 request.noteType()));
     }
 
     @PostMapping("/notes/{noteId}/move")
-    public Result<Void> move(@PathVariable Long noteId, @Valid @RequestBody NoteMoveRequest request) {
+    public Result<Void> move(@PathVariable("noteId") Long noteId, @Valid @RequestBody NoteMoveRequest request) {
         knowledgeService.move(UserContext.getUserId(), noteId, request.targetParentId(), request.sortOrder());
         return Result.ok();
     }
@@ -109,29 +124,30 @@ public class KnowledgeController {
     }
 
     @DeleteMapping("/notes/{noteId}")
-    public Result<Void> deleteNote(@PathVariable Long noteId) {
+    public Result<Void> deleteNote(@PathVariable("noteId") Long noteId) {
         knowledgeService.deleteNote(UserContext.getUserId(), noteId);
         return Result.ok();
     }
 
     @GetMapping("/notes/{noteId}/versions")
-    public Result<List<NoteVersion>> versions(@PathVariable Long noteId) {
+    public Result<List<NoteVersion>> versions(@PathVariable("noteId") Long noteId) {
         return Result.ok(knowledgeService.listVersions(UserContext.getUserId(), noteId));
     }
 
     @PostMapping("/notes/{noteId}/versions/{version}/restore")
-    public Result<Note> restoreVersion(@PathVariable Long noteId, @PathVariable Integer version) {
+    public Result<Note> restoreVersion(@PathVariable("noteId") Long noteId,
+                                       @PathVariable("version") Integer version) {
         return Result.ok(knowledgeService.restoreVersion(UserContext.getUserId(), noteId, version));
     }
 
     @GetMapping("/recycle-bin/notes")
-    public Result<List<Note>> recycleNotes(@RequestParam(required = false) Long libraryId) {
+    public Result<List<Note>> recycleNotes(@RequestParam(value = "libraryId", required = false) Long libraryId) {
         List<Note> notes = knowledgeService.recycleNotes(UserContext.getUserId());
         return Result.ok(libraryId == null ? notes : notes.stream().filter(note -> libraryId.equals(note.getLibraryId())).toList());
     }
 
     @PostMapping("/notes/{noteId}/restore")
-    public Result<Void> restoreNote(@PathVariable Long noteId) {
+    public Result<Void> restoreNote(@PathVariable("noteId") Long noteId) {
         knowledgeService.restoreNote(UserContext.getUserId(), noteId);
         return Result.ok();
     }
@@ -150,6 +166,9 @@ public class KnowledgeController {
             String description,
             @PositiveOrZero Integer sortOrder
     ) {
+    }
+
+    public record LibraryDeleteRequest(@NotBlank String confirmationName) {
     }
 
     public record NoteCreateRequest(

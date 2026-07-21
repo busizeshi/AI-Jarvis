@@ -96,6 +96,11 @@ public class ChatPersistenceService {
         citation.setNoteTitle(source.noteTitle());
         citation.setChunkText(source.chunkText());
         citation.setScore(source.score());
+        citation.setChunkId(source.chunkId());
+        citation.setChunkIndex(source.chunkIndex());
+        citation.setStartOffset(source.startOffset());
+        citation.setEndOffset(source.endOffset());
+        citation.setRetrievalSources(String.join(",", source.retrievalSources()));
         return citation;
     }
 }

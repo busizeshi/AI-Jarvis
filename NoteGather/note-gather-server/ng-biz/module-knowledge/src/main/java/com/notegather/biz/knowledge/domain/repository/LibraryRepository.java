@@ -8,6 +8,8 @@ public interface LibraryRepository {
 
     Library findByIdAndUserId(Long libraryId, Long userId);
 
+    Library findById(Long libraryId);
+
     Library findDeletedByIdAndUserId(Long libraryId, Long userId);
 
     List<Library> findByUserId(Long userId, boolean deleted);

@@ -19,6 +19,11 @@ public class MybatisLibraryRepository implements LibraryRepository {
     }
 
     @Override
+    public Library findById(Long libraryId) {
+        return libraryMapper.selectById(libraryId);
+    }
+
+    @Override
     public Library findDeletedByIdAndUserId(Long libraryId, Long userId) {
         return libraryMapper.selectByIdAndUserId(libraryId, userId, 1);
     }

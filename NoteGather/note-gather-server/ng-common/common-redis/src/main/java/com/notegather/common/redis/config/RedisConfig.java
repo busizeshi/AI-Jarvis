@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
+import com.notegather.common.redis.session.AuthSessionStore;
+import org.redisson.api.RedissonClient;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -20,6 +22,12 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
  */
 @AutoConfiguration
 public class RedisConfig {
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AuthSessionStore authSessionStore(RedissonClient redissonClient) {
+        return new AuthSessionStore(redissonClient);
+    }
 
     @Bean
     @ConditionalOnMissingBean(StringRedisTemplate.class)

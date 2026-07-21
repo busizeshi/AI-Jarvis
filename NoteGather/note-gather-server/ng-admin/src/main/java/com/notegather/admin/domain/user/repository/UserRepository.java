@@ -15,4 +15,10 @@ public interface UserRepository {
     void save(User user);
 
     boolean updateStatus(Long userId, Integer status);
+
+    /** 更新用户头像 URL（置空时传 null） */
+    boolean updateAvatarUrl(Long userId, String avatarUrl);
+
+    /** 更新用户基本资料（昵称、简介） */
+    boolean updateProfile(Long userId, String nickname, String bio);
 }

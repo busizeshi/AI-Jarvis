@@ -25,6 +25,11 @@ public interface NoteMapper extends BaseMapper<Note> {
     @Select("SELECT * FROM t_note WHERE user_id = #{userId} AND deleted = 1 ORDER BY update_time DESC")
     List<Note> selectDeletedByUserId(@Param("userId") Long userId);
 
+    @Select("SELECT * FROM t_note WHERE user_id = #{userId} AND library_id = #{libraryId} "
+            + "AND title = #{title} AND node_type = 'NOTE' AND deleted = 0 ORDER BY id")
+    List<Note> selectActiveByTitle(@Param("userId") Long userId, @Param("libraryId") Long libraryId,
+                                   @Param("title") String title);
+
     @Update("UPDATE t_note SET deleted = 0, parent_id = #{parentId} "
             + "WHERE id = #{noteId} AND user_id = #{userId} AND deleted = 1")
     int restore(@Param("noteId") Long noteId, @Param("userId") Long userId, @Param("parentId") Long parentId);

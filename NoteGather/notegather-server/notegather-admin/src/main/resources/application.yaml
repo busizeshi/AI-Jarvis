@@ -1,0 +1,30 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: notegather-admin
+  profiles:
+    active: dev
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 192.168.1.12:8848
+        namespace: dev
+        username: nacos
+        password: nacos
+      config:
+        server-addr: 192.168.1.12:8848
+        namespace: dev
+        username: nacos
+        password: nacos
+        file-extension: yaml
+        shared-configs:
+          - data-id: common.yaml
+            refresh: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info

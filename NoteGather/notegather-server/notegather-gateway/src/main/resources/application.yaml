@@ -1,0 +1,32 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: notegather-gateway
+  profiles:
+    active: dev
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 192.168.1.12:8848
+        namespace: dev
+        username: nacos
+        password: nacos
+      config:
+        server-addr: 192.168.1.12:8848
+        namespace: dev
+        username: nacos
+        password: nacos
+        file-extension: yaml
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info

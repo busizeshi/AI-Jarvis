@@ -6,6 +6,10 @@ spring:
     name: notegather-biz
   profiles:
     active: dev
+  config:
+    import:
+      - optional:nacos:notegather-biz.yaml
+      - optional:nacos:common.yaml
   cloud:
     nacos:
       discovery:

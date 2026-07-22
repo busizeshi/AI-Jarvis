@@ -1,0 +1,77 @@
+[project]
+name = "notegather-ai"
+version = "1.0.0"
+description = "NoteGather AI Service - 文件解析、检索、图谱与工作流"
+authors = [
+    {name = "NoteGather Team"}
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "httpx>=0.28.0",
+    "redis>=5.2.0",
+    "minio>=7.2.10",
+    "qdrant-client>=1.12.0",
+    "neo4j>=5.26.0",
+    "litellm>=1.52.0",
+    "langgraph>=0.2.48",
+    "langchain-text-splitters>=0.3.2",
+    "sentence-transformers>=3.3.1",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "pymysql>=1.1.1",
+    "aiomysql>=0.2.0",
+    "python-multipart>=0.0.17",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "structlog>=24.4.0",
+    "opentelemetry-api>=1.28.2",
+    "opentelemetry-sdk>=1.28.2",
+    "opentelemetry-instrumentation-fastapi>=0.49b2",
+    "prometheus-client>=0.21.0",
+    "tenacity>=9.0.0",
+    "markitdown>=0.0.1a2",
+    "pypdf>=5.1.0",
+    "python-pptx>=1.0.2",
+    "python-docx>=1.1.2",
+    "openpyxl>=3.1.5",
+    "pillow>=11.0.0",
+    "paddleocr>=2.9.1",
+    "grpcio>=1.68.1",
+    "grpcio-tools>=1.68.1",
+    "protobuf>=5.29.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.8.4",
+    "mypy>=1.13.0",
+    "bandit>=1.8.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

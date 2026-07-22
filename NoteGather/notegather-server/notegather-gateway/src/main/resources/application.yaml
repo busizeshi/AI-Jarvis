@@ -6,6 +6,10 @@ spring:
     name: notegather-gateway
   profiles:
     active: dev
+  config:
+    import:
+      - optional:nacos:notegather-gateway.yaml
+      - optional:nacos:common.yaml
   cloud:
     nacos:
       discovery:
@@ -19,6 +23,9 @@ spring:
         username: nacos
         password: nacos
         file-extension: yaml
+        shared-configs:
+          - data-id: common.yaml
+            refresh: true
     gateway:
       discovery:
         locator:

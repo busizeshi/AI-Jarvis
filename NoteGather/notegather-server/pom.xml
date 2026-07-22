@@ -39,7 +39,7 @@
         
         <!-- 数据库 -->
         <mybatis-plus.version>3.5.9</mybatis-plus.version>
-        <mysql.version>8.0.46</mysql.version>
+        <mysql.version>8.0.33</mysql.version>
         <druid.version>1.2.24</druid.version>
         
         <!-- Redis -->

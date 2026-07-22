@@ -16,8 +16,5 @@
 
     <modules>
         <module>common-core</module>
-        <module>common-security</module>
-        <module>common-rpc-contract</module>
-        <module>common-observability</module>
     </modules>
 </project>

@@ -44,6 +44,14 @@ public class Result<T> implements Serializable {
         return new Result<>("OK", "success", data, null);
     }
     
+    public static <T> Result<T> success() {
+        return ok();
+    }
+    
+    public static <T> Result<T> success(T data) {
+        return ok(data);
+    }
+    
     public static <T> Result<T> fail(String code, String message) {
         return new Result<>(code, message, null, null);
     }

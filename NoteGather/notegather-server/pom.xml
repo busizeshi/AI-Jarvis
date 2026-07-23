@@ -67,6 +67,9 @@
         <guava.version>33.4.0-jre</guava.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         
+        <!-- Knife4j -->
+        <knife4j.version>4.5.0</knife4j.version>
+        
         <!-- 可观测性 -->
         <micrometer.version>1.14.2</micrometer.version>
         <opentelemetry.version>1.44.1</opentelemetry.version>
@@ -224,6 +227,13 @@
                 <scope>provided</scope>
             </dependency>
             
+            <!-- Knife4j OpenAPI3 -->
+            <dependency>
+                <groupId>com.github.xiaoymin</groupId>
+                <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
+                <version>${knife4j.version}</version>
+            </dependency>
+            
             <!-- Testcontainers -->
             <dependency>
                 <groupId>org.testcontainers</groupId>
@@ -251,6 +261,7 @@
                         <source>${java.version}</source>
                         <target>${java.version}</target>
                         <encoding>${project.build.sourceEncoding}</encoding>
+                        <parameters>true</parameters>
                     </configuration>
                 </plugin>
             </plugins>

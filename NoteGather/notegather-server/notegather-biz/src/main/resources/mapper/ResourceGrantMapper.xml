@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.notegather.biz.infrastructure.persistence.mapper.ResourceGrantMapper">
+    
+    <select id="selectByUserIdAndResource" resultType="com.notegather.biz.infrastructure.persistence.entity.ResourceGrantEntity">
+        SELECT * FROM resource_grants
+        WHERE granted_user_id = #{userId}
+          AND resource_type = #{resourceType}
+          AND resource_id = #{resourceId}
+        LIMIT 1
+    </select>
+    
+    <select id="selectByResource" resultType="com.notegather.biz.infrastructure.persistence.entity.ResourceGrantEntity">
+        SELECT * FROM resource_grants
+        WHERE resource_type = #{resourceType}
+          AND resource_id = #{resourceId}
+        ORDER BY permission_level DESC, created_at ASC
+    </select>
+    
+    <select id="selectByResourceAndPermissionLevel" resultType="com.notegather.biz.infrastructure.persistence.entity.ResourceGrantEntity">
+        SELECT * FROM resource_grants
+        WHERE resource_type = #{resourceType}
+          AND resource_id = #{resourceId}
+          AND permission_level = #{permissionLevel}
+        ORDER BY created_at ASC
+    </select>
+    
+    <select id="selectByUserId" resultType="com.notegather.biz.infrastructure.persistence.entity.ResourceGrantEntity">
+        SELECT * FROM resource_grants
+        WHERE granted_user_id = #{userId}
+        ORDER BY created_at DESC
+    </select>
+    
+    <select id="selectByUserIdAndResourceType" resultType="com.notegather.biz.infrastructure.persistence.entity.ResourceGrantEntity">
+        SELECT * FROM resource_grants
+        WHERE granted_user_id = #{userId}
+          AND resource_type = #{resourceType}
+        ORDER BY created_at DESC
+    </select>
+    
+    <select id="countByUserIdAndResource" resultType="int">
+        SELECT COUNT(*) FROM resource_grants
+        WHERE granted_user_id = #{userId}
+          AND resource_type = #{resourceType}
+          AND resource_id = #{resourceId}
+    </select>
+    
+    <delete id="deleteByResource">
+        DELETE FROM resource_grants
+        WHERE resource_type = #{resourceType}
+          AND resource_id = #{resourceId}
+    </delete>
+    
+    <delete id="deleteByUserIdAndResource">
+        DELETE FROM resource_grants
+        WHERE granted_user_id = #{userId}
+          AND resource_type = #{resourceType}
+          AND resource_id = #{resourceId}
+    </delete>
+    
+    <select id="selectOwnerByResource" resultType="com.notegather.biz.infrastructure.persistence.entity.ResourceGrantEntity">
+        SELECT * FROM resource_grants
+        WHERE resource_type = #{resourceType}
+          AND resource_id = #{resourceId}
+          AND permission_level = 'owner'
+        LIMIT 1
+    </select>
+    
+    <select id="countByResource" resultType="long">
+        SELECT COUNT(*) FROM resource_grants
+        WHERE resource_type = #{resourceType}
+          AND resource_id = #{resourceId}
+    </select>
+    
+</mapper>
